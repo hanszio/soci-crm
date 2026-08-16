@@ -290,6 +290,90 @@ async function main() {
     JSON.stringify(profAgain.json?.profile?.tone)
   );
 
+  console.log("\n== us-bot-api: contexto conversacional ==");
+  const ctxNoKey = await api(`/api/bot/context?conversationId=${convId}`);
+  ok("contexto sin API key → 401", ctxNoKey.res.status === 401);
+
+  const ctx = await bot(`/api/bot/context?conversationId=${convId}`);
+  ok(
+    "GET /api/bot/context por conversationId → 200",
+    ctx.res.ok && ctx.json?.conversation?.id === convId,
+    JSON.stringify(ctx.json?.conversation)
+  );
+  ok(
+    "trae la identidad estable del contacto (no solo el teléfono)",
+    typeof ctx.json?.contact?.waIdentity === "string" &&
+      ctx.json.contact.waIdentity.length > 0
+  );
+  ok(
+    "trae la etapa del lead en el pipeline",
+    typeof ctx.json?.lead?.stageName === "string",
+    JSON.stringify(ctx.json?.lead)
+  );
+  ok(
+    "la ventana de 24 h viaja abierta tras un entrante reciente",
+    ctx.json?.conversation?.windowOpen === true &&
+      ctx.json?.conversation?.windowRemainingMs > 0,
+    JSON.stringify(ctx.json?.conversation)
+  );
+
+  const ctxByIdentity = await bot(
+    `/api/bot/context?waIdentity=${encodeURIComponent(ctx.json.contact.waIdentity)}`
+  );
+  ok(
+    "resolver por waIdentity da la MISMA conversación",
+    ctxByIdentity.json?.conversation?.id === convId,
+    JSON.stringify(ctxByIdentity.json?.conversation?.id)
+  );
+
+  const ctxSinArgs = await bot("/api/bot/context");
+  ok("contexto sin waIdentity ni conversationId → 422", ctxSinArgs.res.status === 422);
+  const ctx404 = await bot("/api/bot/context?conversationId=cv_no_existe");
+  ok("contexto de una conversación inexistente → 404", ctx404.res.status === 404);
+
+  console.log("\n== us-bot-api: el bot envía a través del CRM ==");
+  const sendNoKey = await api("/api/bot/messages", {
+    method: "POST",
+    body: JSON.stringify({ conversationId: convId, text: "hola" }),
+  });
+  ok("envío sin API key → 401", sendNoKey.res.status === 401);
+
+  const outboxBeforeBot =
+    ((await api("/api/dev/wa-mock/outbox")).json?.outbox ?? []).length;
+  const botSend = await bot("/api/bot/messages", {
+    method: "POST",
+    body: JSON.stringify({ conversationId: convId, text: "Hola, soy el bot." }),
+  });
+  ok(
+    "POST /api/bot/messages → 200 con messageId",
+    botSend.res.ok && typeof botSend.json?.messageId === "string",
+    JSON.stringify(botSend.json)
+  );
+  const outboxAfterBot =
+    ((await api("/api/dev/wa-mock/outbox")).json?.outbox ?? []).length;
+  ok(
+    "el mensaje salió de verdad por el canal de WhatsApp",
+    outboxAfterBot === outboxBeforeBot + 1,
+    `antes=${outboxBeforeBot} después=${outboxAfterBot}`
+  );
+  const botMsg = ((await api(`/api/conversations/${convId}/messages`)).json
+    ?.messages ?? []).find((m) => m.id === botSend.json?.messageId);
+  ok(
+    "queda en la bandeja marcado como IA (aiGenerated + origin=ai)",
+    botMsg?.aiGenerated === true && botMsg?.origin === "ai",
+    JSON.stringify({ aiGenerated: botMsg?.aiGenerated, origin: botMsg?.origin })
+  );
+  const sendNoConv = await bot("/api/bot/messages", {
+    method: "POST",
+    body: JSON.stringify({ conversationId: "cv_no_existe", text: "hola" }),
+  });
+  ok("envío a conversación inexistente → 404", sendNoConv.res.status === 404);
+  const sendVacio = await bot("/api/bot/messages", {
+    method: "POST",
+    body: JSON.stringify({ conversationId: convId, text: "" }),
+  });
+  ok("texto vacío → 422 (no se manda un mensaje en blanco)", sendVacio.res.status === 422);
+
   console.log("\n== us-bot-api: IA pausada y reset ==");
   const pause = await api(`/api/conversations/${convId}`, {
     method: "PATCH",
@@ -307,6 +391,26 @@ async function main() {
       typPaused.json?.ok === false &&
       typPaused.json?.reason === "ai_paused",
     JSON.stringify(typPaused.json)
+  );
+
+  const outboxBeforePaused =
+    ((await api("/api/dev/wa-mock/outbox")).json?.outbox ?? []).length;
+  const sendPaused = await bot("/api/bot/messages", {
+    method: "POST",
+    body: JSON.stringify({ conversationId: convId, text: "¿sigo yo?" }),
+  });
+  ok(
+    "el bot NO habla sobre una conversación tomada por un humano → 409 ai_paused",
+    sendPaused.res.status === 409 &&
+      sendPaused.json?.error?.code === "ai_paused",
+    JSON.stringify(sendPaused.json)
+  );
+  const outboxAfterPaused =
+    ((await api("/api/dev/wa-mock/outbox")).json?.outbox ?? []).length;
+  ok(
+    "y el rechazo ocurre ANTES de tocar Meta",
+    outboxAfterPaused === outboxBeforePaused,
+    `antes=${outboxBeforePaused} después=${outboxAfterPaused}`
   );
 
   const msgsBeforeReset =
