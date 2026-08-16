@@ -43,6 +43,13 @@
       "when": 1786850050625,
       "tag": "0005_glossy_excalibur",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786855153169,
+      "tag": "0006_keen_thor_girl",
+      "breakpoints": true
     }
   ]
 }

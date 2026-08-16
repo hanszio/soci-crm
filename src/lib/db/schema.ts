@@ -183,6 +183,14 @@ export const lead = pgTable(
       .notNull()
       .references(() => pipelineStage.id),
     position: integer("position").notNull().default(0),
+    /**
+     * Monto de la negociación en CENTAVOS ENTEROS. NULL = nadie lo capturó, que
+     * no es lo mismo que cero: un trato sin monto no vale $0, simplemente no se
+     * sabe, y el tablero lo dice con palabras en vez de sumar un cero.
+     */
+    amountCents: integer("amount_cents"),
+    /** Moneda del monto; la del negocio al capturarlo (Ajustes → Marca). */
+    currency: text("currency"),
     lastActivityAt: timestamp("last_activity_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

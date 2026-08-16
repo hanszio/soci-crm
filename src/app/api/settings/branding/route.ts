@@ -2,6 +2,7 @@ import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getSessionOrNull } from "@/lib/auth/session";
 import { isValidHex, resolveAccentSet } from "@/lib/branding";
+import { CURRENCIES } from "@/lib/money";
 import { getBranding, saveBranding } from "@/server/branding";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +17,8 @@ export async function GET() {
 const putSchema = z.object({
   name: z.string().trim().min(1).max(30),
   accent: z.string().refine(isValidHex, "Color hex inválido (#rrggbb)"),
+  /** La moneda del negocio: la única que el tablero suma. */
+  currency: z.enum(CURRENCIES),
 });
 
 export const PUT = withAuth(async (session, req: Request) => {

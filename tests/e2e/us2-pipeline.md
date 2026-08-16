@@ -71,7 +71,27 @@ la gente llegue por WhatsApp.
     ✅ Solo plantillas aprobadas: iniciar con texto libre lo prohíbe Meta.
     ✅ Con la ventana de 24 h abierta se avisa en vez de gastar una plantilla.
 
+## Monto de la negociación
+
+Automatizado en `scripts/e2e-monto-pipeline.mjs`. El tablero cuenta personas;
+esto le agrega cuánto dinero hay en cada columna.
+
+16. **Capturar el monto** desde la tarjeta ("+ monto").
+    ✅ Acepta lo que uno teclea: `12500`, `12,500.50`, `$12 500`.
+    ✅ Guardarlo **no mueve** la tarjeta, y mover la tarjeta no borra el monto.
+    ✅ Vacío borra el monto: un trato sin número no vale cero, no se sabe.
+17. **Total por columna** al pie de cada etapa.
+    ✅ Suma solo la moneda del negocio, en centavos enteros.
+    ✅ Sin montos capturados dice "Sin montos capturados" — un `$0.00` se lee
+    como un error del sistema, no como un dato.
+    ✅ Si hay importes en otra moneda, lo **dice** en vez de descartarlos en
+    silencio.
+18. **La moneda se elige** en Ajustes → Marca.
+    ✅ El tablero la refleja.
+    ✅ Un importe ya capturado conserva la suya: cambiar el ajuste no
+    reinterpreta pesos como dólares.
+
 ## Contactos (FR-013)
 
-16. Buscar por "Frio" → filtra; editar notas → persiste; archivar → desaparece
+19. Buscar por "Frio" → filtra; editar notas → persiste; archivar → desaparece
     de la lista (visible con "Ver archivados"); desarchivar → vuelve.

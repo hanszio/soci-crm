@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ACCENT_PRESETS, isValidHex, resolveAccentSet, type Branding } from "@/lib/branding";
+import { CURRENCIES, DEFAULT_CURRENCY, type Currency } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { useResolvedTheme } from "@/components/use-theme";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ export function BrandingClient() {
   const mode = useResolvedTheme();
   const [name, setName] = useState("");
   const [accent, setAccent] = useState("#3f5972");
+  const [currency, setCurrency] = useState<Currency>(DEFAULT_CURRENCY);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +29,7 @@ export function BrandingClient() {
         if (d) {
           setName(d.branding.name);
           setAccent(d.branding.accent);
+          if (d.branding.currency) setCurrency(d.branding.currency);
         }
         setLoaded(true);
       })
@@ -45,7 +48,7 @@ export function BrandingClient() {
     const res = await fetch("/api/settings/branding", {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name: name.trim(), accent }),
+      body: JSON.stringify({ name: name.trim(), accent, currency }),
     }).catch(() => null);
     setSaving(false);
     if (!res?.ok) {
@@ -83,6 +86,26 @@ export function BrandingClient() {
               placeholder="Vocero"
               className="max-w-xs"
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="brand-currency">Moneda del negocio</Label>
+            <select
+              id="brand-currency"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value as Currency)}
+              className="h-9 max-w-xs rounded-md border border-input bg-card px-2 text-sm"
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-text-3">
+              Es la única que el Pipeline suma. Los montos capturados en otra
+              moneda se muestran, pero quedan fuera del total de su columna.
+            </p>
           </div>
 
           <div className="space-y-2">

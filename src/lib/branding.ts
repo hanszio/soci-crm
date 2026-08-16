@@ -1,5 +1,7 @@
+import { DEFAULT_CURRENCY, isCurrency, type Currency } from "@/lib/money";
+
 /**
- * White-label: nombre del CRM + acento por organización.
+ * White-label: nombre del CRM, acento y moneda por organización.
  * Presets sobrios del sistema Atlas; para un color personalizado se derivan
  * hover/soft/tint/text y se garantiza contraste con texto blanco.
  */
@@ -20,9 +22,15 @@ export type ThemeMode = "light" | "dark";
 export type Branding = {
   name: string;
   accent: string; // hex del acento base elegido
+  /** Moneda del negocio: la única que el tablero suma. */
+  currency: Currency;
 };
 
-export const DEFAULT_BRANDING: Branding = { name: "Vocero", accent: "#3f5972" };
+export const DEFAULT_BRANDING: Branding = {
+  name: "Vocero",
+  accent: "#3f5972",
+  currency: DEFAULT_CURRENCY,
+};
 
 /** Presets del handoff (valores exactos). */
 export const ACCENT_PRESETS: Record<string, { label: string; set: AccentSet }> = {
@@ -178,5 +186,8 @@ export function normalizeBranding(input: Partial<Branding> | null): Branding {
     input?.accent && isValidHex(input.accent)
       ? input.accent.toLowerCase()
       : DEFAULT_BRANDING.accent;
-  return { name, accent };
+  const currency = isCurrency(input?.currency)
+    ? input.currency
+    : DEFAULT_BRANDING.currency;
+  return { name, accent, currency };
 }
