@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { apiError } from "@/lib/api";
 import { requireBotKey, resolveInstanceOrg } from "@/server/bot/auth";
+import { serializeFicha } from "@/server/bot/ficha";
 import { isWindowOpen, windowRemainingMs } from "@/server/inbox/window";
 
 export const dynamic = "force-dynamic";
@@ -108,6 +109,7 @@ export async function GET(req: Request) {
       name: contact.name,
       waIdentity: contact.waIdentity,
       phone: contact.phone,
+      ficha: serializeFicha(contact),
     },
     conversation: {
       id: conversation.id,

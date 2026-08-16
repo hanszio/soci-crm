@@ -331,6 +331,83 @@ async function main() {
   const ctx404 = await bot("/api/bot/context?conversationId=cv_no_existe");
   ok("contexto de una conversación inexistente → 404", ctx404.res.status === 404);
 
+  console.log("\n== us-bot-api: ficha de calificación ==");
+  const fichaNoKey = await api("/api/bot/ficha", {
+    method: "PUT",
+    body: JSON.stringify({ conversationId: convId, ficha: { rubro: "x" } }),
+  });
+  ok("ficha sin API key → 401", fichaNoKey.res.status === 401);
+
+  const f1 = await bot("/api/bot/ficha", {
+    method: "PUT",
+    body: JSON.stringify({
+      conversationId: convId,
+      ficha: { rubro: "dentista", geo: "Querétaro", calificado: true },
+    }),
+  });
+  ok(
+    "PUT /api/bot/ficha → 200 con la ficha completa",
+    f1.res.ok && f1.json?.ficha?.rubro === "dentista",
+    JSON.stringify(f1.json)
+  );
+  ok(
+    "las claves las pone el negocio: el CRM guarda lo que le manden",
+    f1.json?.ficha?.geo === "Querétaro" && f1.json?.ficha?.calificado === true,
+    JSON.stringify(f1.json?.ficha)
+  );
+
+  const ctxConFicha = await bot(`/api/bot/context?conversationId=${convId}`);
+  ok(
+    "la ficha viaja en el contexto del siguiente turno",
+    ctxConFicha.json?.contact?.ficha?.rubro === "dentista",
+    JSON.stringify(ctxConFicha.json?.contact?.ficha)
+  );
+
+  const f2 = await bot("/api/bot/ficha", {
+    method: "PUT",
+    body: JSON.stringify({
+      conversationId: convId,
+      ficha: { presupuesto: "20 mil", geo: null },
+    }),
+  });
+  ok(
+    "merge campo a campo: lo ausente se conserva",
+    f2.json?.ficha?.rubro === "dentista" && f2.json?.ficha?.presupuesto === "20 mil",
+    JSON.stringify(f2.json?.ficha)
+  );
+  ok(
+    "null explícito borra la clave",
+    f2.json?.ficha && !("geo" in f2.json.ficha),
+    JSON.stringify(f2.json?.ficha)
+  );
+
+  const fBasura = await bot("/api/bot/ficha", {
+    method: "PUT",
+    body: JSON.stringify({
+      conversationId: convId,
+      ficha: { anidado: { a: 1 }, vacío: "", bueno: "  sí  " },
+    }),
+  });
+  ok(
+    "lo que no se entiende se ignora sin 422 (no se le tiran datos al bot)",
+    fBasura.res.ok &&
+      fBasura.json?.ficha?.bueno === "sí" &&
+      !("anidado" in fBasura.json.ficha) &&
+      !("vacío" in fBasura.json.ficha),
+    JSON.stringify(fBasura.json?.ficha)
+  );
+
+  const fNoConv = await bot("/api/bot/ficha", {
+    method: "PUT",
+    body: JSON.stringify({ conversationId: "cv_no_existe", ficha: { a: "b" } }),
+  });
+  ok("ficha de conversación inexistente → 404", fNoConv.res.status === 404);
+  const fSinFicha = await bot("/api/bot/ficha", {
+    method: "PUT",
+    body: JSON.stringify({ conversationId: convId }),
+  });
+  ok("cuerpo sin `ficha` → 422", fSinFicha.res.status === 422);
+
   console.log("\n== us-bot-api: el bot envía a través del CRM ==");
   const sendNoKey = await api("/api/bot/messages", {
     method: "POST",

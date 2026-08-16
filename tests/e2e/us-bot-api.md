@@ -81,26 +81,41 @@ es del bot.
 22. Una conversación del Laboratorio no se resuelve nunca por `waIdentity`: el
     bot de producción no debe hablarle a un cliente simulado.
 
+## Ficha de calificación
+
+Lo que el bot va descubriendo del lead. Las claves las define el negocio: el
+CRM no impone un cuestionario.
+
+23. `PUT /api/bot/ficha {conversationId, ficha}` con la key → **200** con la
+    ficha COMPLETA resultante (no solo el parche), y esa misma ficha aparece en
+    `contact.ficha` del contexto del siguiente turno.
+24. Un segundo PUT con otras claves las **suma**: lo que no viene se conserva.
+    Un `null` explícito **borra** esa clave.
+25. Valores que el CRM no puede guardar —objetos, arreglos, cadenas vacías,
+    números no finitos— se ignoran en silencio y el resto sí se guarda: un 422
+    le tiraría al bot datos de calificación que ya costaron una conversación.
+26. Conversación inexistente → **404**. Cuerpo sin `ficha` → **422**.
+
 ## El bot envía a través del CRM
 
-23. `POST /api/bot/messages {conversationId, text}` con la key → **200**
+27. `POST /api/bot/messages {conversationId, text}` con la key → **200**
     `{messageId}`, el mensaje aparece en la bandeja marcado como IA
     (`aiGenerated: true`, `origin: "ai"`) y sale por el canal de WhatsApp. El
     token de Meta nunca viajó al bot.
-24. Con la IA pausada (handoff), el mismo envío → **409** `ai_paused` y el
+28. Con la IA pausada (handoff), el mismo envío → **409** `ai_paused` y el
     outbox NO cambia: el rechazo ocurre antes de tocar Meta.
-25. Con la ventana de 24 h cerrada → **409** `window_closed`. El bot no puede
+29. Con la ventana de 24 h cerrada → **409** `window_closed`. El bot no puede
     esquivar la regla de Meta; para eso está el envío de plantilla desde la app.
-26. En una conversación del Laboratorio → **409** `sandbox_violation`.
+30. En una conversación del Laboratorio → **409** `sandbox_violation`.
 
 ## Camino infeliz
 
-27. `GET /api/bot/profile` en una instancia sin perfil de agente → **404**
+31. `GET /api/bot/profile` en una instancia sin perfil de agente → **404**
     `no_profile` (condición esperada, no un 500: el bot cae a su brief local).
-28. `GET /api/bot/context` sin `waIdentity` ni `conversationId` → **422**;
+32. `GET /api/bot/context` sin `waIdentity` ni `conversationId` → **422**;
     con un `conversationId` que no existe → **404**.
-29. `POST /api/bot/messages` con texto vacío → **422**.
-30. `POST /api/bot/typing` con un `conversationId` inexistente → **404**.
-31. Con Meta caído (token `...-invalid` en el mock), typing → **200**
+33. `POST /api/bot/messages` con texto vacío → **422**.
+34. `POST /api/bot/typing` con un `conversationId` inexistente → **404**.
+35. Con Meta caído (token `...-invalid` en el mock), typing → **200**
     `{ok:false, reason:"meta_error"}`: es best-effort por contrato, al bot
     jamás le vale reintentarlo.

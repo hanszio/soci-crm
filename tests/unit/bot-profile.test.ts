@@ -1,7 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { serializeBotProfile } from "@/server/bot/profile";
 import type { schema } from "@/lib/db";
 import { resetRateLimit } from "@/lib/rate-limit";
+// Estático a propósito: `vi.mock` se hoistea por encima de los imports, así que
+// la ruta ya nace con la BD falsa. Importarla DENTRO de cada test cargaba la
+// cadena de módulos con el reloj corriendo y, con la suite completa en
+// paralelo, el primero se pasaba de los 5 s de timeout.
+import { GET } from "@/app/api/bot/profile/route";
 
 const dbState = vi.hoisted(() => ({ queue: [] as unknown[][] }));
 
@@ -123,13 +128,11 @@ describe("GET /api/bot/profile (ruta, DB fake)", () => {
   }
 
   it("sin API key → 401 (no filtra existencia del perfil)", async () => {
-    const { GET } = await import("@/app/api/bot/profile/route");
     const res = await GET(req());
     expect(res.status).toBe(401);
   });
 
   it("instancia sin perfil (legada) → 404 no_profile", async () => {
-    const { GET } = await import("@/app/api/bot/profile/route");
     dbState.queue = [[]];
     const res = await GET(req(KEY));
     expect(res.status).toBe(404);
@@ -138,7 +141,6 @@ describe("GET /api/bot/profile (ruta, DB fake)", () => {
   });
 
   it("perfil + KB → 200 con el payload del serializador", async () => {
-    const { GET } = await import("@/app/api/bot/profile/route");
     dbState.queue = [[profileRow()], [qa("¿Cuánto?", "$800.")]];
     const res = await GET(req(KEY));
     expect(res.status).toBe(200);
