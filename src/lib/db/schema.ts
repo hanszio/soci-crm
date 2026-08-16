@@ -132,6 +132,14 @@ export const contact = pgTable(
      * Merge campo a campo; `null` explícito borra la clave.
      */
     ficha: jsonb("ficha").$type<Record<string, unknown>>(),
+    /**
+     * De dónde salió el prospecto. NULL = nadie la capturó, y entonces la API
+     * la deduce. Así no hace falta backfill ni marcar en falso los contactos
+     * que ya existían.
+     */
+    source: text("source", {
+      enum: ["anuncio", "organico", "referido", "conocido", "otro"],
+    }),
     archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

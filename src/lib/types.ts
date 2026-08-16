@@ -77,6 +77,8 @@ export type ContactDto = {
   /** Etapa del embudo del lead asociado; null si el contacto no tiene lead. */
   stageName: string | null;
   archivedAt: string | null;
+  /** De dónde salió el prospecto, capturada o deducida. */
+  source?: SourceDto;
 };
 
 /* ============================================================
@@ -104,3 +106,21 @@ export const LOSS_REASON_LABEL: Record<LossReason, string> = {
 
 /** Quién provocó un movimiento de etapa. */
 export type StageChangeSource = "dueno" | "bot" | "sistema" | "migracion";
+
+/* ============================================================
+ * Fuente del prospecto
+ * ============================================================ */
+
+export type SourceValue =
+  | "anuncio"
+  | "organico"
+  | "referido"
+  | "conocido"
+  | "otro";
+
+export type SourceDto = {
+  /** "desconocida" cuando nadie la capturó y no se pudo deducir. */
+  value: SourceValue | "desconocida";
+  /** `deducida` = la infirió el sistema; `capturada` = la puso el dueño. */
+  source: "capturada" | "deducida";
+};

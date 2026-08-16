@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Archive, ArchiveRestore, MessageSquareText, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  Archive,
+  ArchiveRestore,
+  MessageSquareText,
+  Search,
+  Send,
+  UserPlus,
+} from "lucide-react";
 import type { ContactDto } from "@/lib/types";
 import { formatPhone } from "@/lib/utils";
 import { ContactAvatar } from "@/components/avatar";
@@ -10,14 +18,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { SOURCE_LABELS } from "@/server/contact-source";
+import { NewContactDialog } from "./new-contact-dialog";
+import { StartConversation } from "./start-conversation";
 
 export function ContactsClient() {
+  const router = useRouter();
   const [contacts, setContacts] = useState<ContactDto[]>([]);
   const [query, setQuery] = useState("");
   const [stage, setStage] = useState("all");
   const [stages, setStages] = useState<string[]>([]);
   const [showArchived, setShowArchived] = useState(false);
   const [editing, setEditing] = useState<ContactDto | null>(null);
+  const [creando, setCreando] = useState(false);
+  const [escribiendo, setEscribiendo] = useState<ContactDto | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Mismo rescate que en la Bandeja: lo tecleado antes de que hidrate el JS
@@ -64,7 +78,13 @@ export function ContactsClient() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
-        <h2 className="font-semibold">Contactos</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="font-semibold">Contactos</h2>
+          <Button size="sm" onClick={() => setCreando(true)}>
+            <UserPlus className="mr-1.5 h-4 w-4" strokeWidth={1.8} />
+            Nuevo contacto
+          </Button>
+        </div>
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:gap-3">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <input
@@ -148,6 +168,14 @@ export function ContactsClient() {
                     {c.archivedAt && (
                       <Badge variant="secondary">Archivado</Badge>
                     )}
+                    {/* Solo la fuente que alguien capturó: presentar una
+                        deducción como dato la volvería un número inventado en
+                        cuanto se cuente por fuente. */}
+                    {c.source?.source === "capturada" && (
+                      <Badge variant="secondary">
+                        {SOURCE_LABELS[c.source.value]}
+                      </Badge>
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     {formatPhone(c.phone)}
@@ -161,6 +189,17 @@ export function ContactsClient() {
                     onClick={() => setEditing(c)}
                   >
                     Editar
+                  </Button>
+                  {/* A quien nunca escribió hay que abrirle la conversación con
+                      una plantilla: es regla de Meta, no del CRM. */}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Escribir primero"
+                    title="Escribir primero (con plantilla)"
+                    onClick={() => setEscribiendo(c)}
+                  >
+                    <Send className="h-4 w-4" />
                   </Button>
                   <Link href={`/inbox?contact=${c.id}`}>
                     <Button variant="ghost" size="icon" aria-label="Abrir conversación">
@@ -193,6 +232,50 @@ export function ContactsClient() {
           onSave={async (patchBody) => {
             await patch(editing.id, patchBody);
             setEditing(null);
+          }}
+        />
+      )}
+
+      {escribiendo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Escribir primero"
+        >
+          <div className="w-full max-w-md rounded-lg border bg-card p-4 shadow-pop">
+            <div className="mb-3 flex items-baseline justify-between gap-2">
+              <h3 className="font-semibold">
+                Escribir a {escribiendo.name}
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => setEscribiendo(null)}>
+                Cerrar
+              </Button>
+            </div>
+            <StartConversation
+              contactId={escribiendo.id}
+              onStarted={() => {
+                const contactId = escribiendo.id;
+                setEscribiendo(null);
+                // La Bandeja resuelve por CONTACTO (`?contact=`), no por
+                // conversación: con `?conversation=` no seleccionaría nada.
+                router.push(`/inbox?contact=${contactId}`);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {creando && (
+        <NewContactDialog
+          onClose={() => setCreando(false)}
+          onCreated={() => {
+            setCreando(false);
+            void refetch();
+          }}
+          onOpenExisting={(contactId) => {
+            setCreando(false);
+            router.push(`/inbox?contact=${contactId}`);
           }}
         />
       )}

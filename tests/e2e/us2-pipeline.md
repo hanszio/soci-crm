@@ -49,7 +49,29 @@ cada lead HOY; la bitácora es lo que permite preguntar qué pasó antes.
     movimiento como `sistema`, y eliminar una etapa con reubicación deja un
     evento por cada lead reubicado.
 
+## Alta manual de prospectos
+
+Automatizado en `scripts/e2e-alta-manual.mjs`. El embudo ya no depende de que
+la gente llegue por WhatsApp.
+
+12. **"Nuevo contacto"** en Contactos: nombre, teléfono, fuente y etapa inicial.
+    ✅ El prospecto aparece en el **Pipeline**, en la etapa elegida — no solo en
+    la lista de contactos.
+    ✅ Su nacimiento queda en la bitácora marcado como capturado por el dueño.
+13. **El teléfono exige código de país.** Un número local crearía un contacto
+    que jamás casaría con los mensajes entrantes, porque Meta manda la identidad
+    completa.
+    ✅ Con guiones o letras → **422** explicando la regla.
+    ✅ Un teléfono repetido → **409**, y se ofrece abrir a quien ya existe en vez
+    de un error seco.
+14. **La fuente capturada manda; lo que nadie capturó no se inventa.**
+    ✅ Quien llegó por WhatsApp queda "sin identificar" y marcado como deducido.
+    ✅ La etiqueta de fuente solo se muestra cuando alguien la capturó.
+15. **Escribir primero**: el botón de enviar abre el panel de plantillas.
+    ✅ Solo plantillas aprobadas: iniciar con texto libre lo prohíbe Meta.
+    ✅ Con la ventana de 24 h abierta se avisa en vez de gastar una plantilla.
+
 ## Contactos (FR-013)
 
-12. Buscar por "Frio" → filtra; editar notas → persiste; archivar → desaparece
+16. Buscar por "Frio" → filtra; editar notas → persiste; archivar → desaparece
     de la lista (visible con "Ver archivados"); desarchivar → vuelve.

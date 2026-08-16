@@ -7,6 +7,7 @@ import { scoped } from "@/lib/db/tenant";
 import { normalizeMx } from "@/lib/meta/client";
 import { digitsOnly, normalizeText } from "@/lib/search";
 import { serializeContact } from "@/server/contacts";
+import { createLeadForContact } from "@/server/inbox/lead-activity";
 
 export const dynamic = "force-dynamic";
 
@@ -91,11 +92,21 @@ export const GET = withAuth(async (session, req: Request) => {
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(120),
+  /**
+   * EXIGE código de país. Un número local crearía un contacto que jamás casaría
+   * con los mensajes entrantes —Meta siempre manda la identidad completa— y el
+   * dueño acabaría con dos fichas de la misma persona. No se asume un país:
+   * diez dígitos son válidos en varios, y asumir mal produce un número
+   * silenciosamente equivocado.
+   */
   phone: z
     .string()
     .trim()
     .regex(/^\d{7,15}$/, "Teléfono en dígitos, con código de país (ej. 5215512345678)"),
   notes: z.string().max(4000).optional(),
+  source: z.enum(["anuncio", "organico", "referido", "conocido", "otro"]).optional(),
+  /** Etapa inicial del lead; si no viene, la primera abierta del tablero. */
+  stageId: z.string().min(1).optional(),
 });
 
 export const POST = withAuth(async (session, req: Request) => {
@@ -114,6 +125,7 @@ export const POST = withAuth(async (session, req: Request) => {
       phone,
       waIdentity: phone,
       notes: body.data.notes ?? null,
+      source: body.data.source ?? null,
     })
     .onConflictDoNothing({
       target: [schema.contact.organizationId, schema.contact.waIdentity],
@@ -122,8 +134,27 @@ export const POST = withAuth(async (session, req: Request) => {
   if (!inserted[0]) {
     return apiError(409, "duplicate", "Ya existe un contacto con ese teléfono");
   }
+
+  // Y su lead: un contacto sin lead es invisible en el Pipeline, que es la
+  // pantalla donde se trabaja el embudo. Dar de alta a alguien y no verlo ahí
+  // es la mitad de la función.
+  const lead = await createLeadForContact({
+    organizationId: session.organizationId,
+    contactId: inserted[0].id,
+    stageId: body.data.stageId,
+    source: "dueno",
+    actorUserId: session.userId,
+  });
+  if (!lead) {
+    return apiError(
+      422,
+      "no_stage",
+      "El tablero no tiene etapas abiertas donde colocar al prospecto"
+    );
+  }
+
   return Response.json(
-    { contact: serializeContact(inserted[0]) },
+    { contact: serializeContact(inserted[0]), lead: { id: lead.id } },
     { status: 201 }
   );
 });
