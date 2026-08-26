@@ -24,8 +24,21 @@ permissions:
 
 jobs:
   gates:
-    name: typecheck · lint · test · build
+    # ADR-001: los canales opcionales viajan en main apagados por bandera. Si
+    # la suite solo corriera en una configuración, el camino opcional se
+    # pudriría en silencio — que es exactamente lo que una rama por feature no
+    # permite evitar. Dos corridas: la instalación normal y la que enciende
+    # todo.
+    name: typecheck · lint · test · build (CHANNELS=${{ matrix.channels }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        channels:
+          - whatsapp
+          - whatsapp,instagram
+    env:
+      CHANNELS: ${{ matrix.channels }}
     steps:
       - uses: actions/checkout@v7
 
