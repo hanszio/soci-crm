@@ -144,7 +144,7 @@ function MediaBlock({ media }: { media: MessageMediaDto }) {
   // document
   return (
     <a
-      className="flex items-center gap-2 rounded-md border bg-background/60 px-2.5 py-2 hover:bg-background"
+      className="flex items-center gap-2 rounded-md border border-border-strong bg-background px-2.5 py-2 hover:bg-subtle"
       href={src}
       download={media.fileName ?? undefined}
       target="_blank"
@@ -193,7 +193,7 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
   return (
     <div
       ref={scrollRef}
-      className="flex flex-1 flex-col gap-[3px] overflow-y-auto bg-chat px-3 py-5 sm:px-[6%]"
+      className="thread-bg flex flex-1 flex-col gap-[3px] overflow-y-auto px-3 py-5 sm:px-[6%]"
     >
       {messages.map((m, i) => {
         const prev = messages[i - 1];
@@ -209,7 +209,7 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
           <div key={m.id}>
             {newDay && (
               <div className="my-3 flex justify-center">
-                <span className="rounded-full border bg-background px-3 py-1 text-[11.5px] font-semibold text-text-2 shadow-sm">
+                <span className="kicker rounded-full border border-border-strong bg-background px-3 py-1 text-text-2 shadow-sm">
                   {dayLabel(m.createdAt)}
                 </span>
               </div>
@@ -225,10 +225,12 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
                 className={cn(
                   // En el teléfono la burbuja necesita casi todo el renglón:
                   // con 64% cada mensaje se parte en tres líneas.
-                  "max-w-[85%] rounded-lg px-3 pb-1.5 pt-2 text-sm leading-[1.45] shadow-sm sm:max-w-[64%]",
+                  // Burbujas del mockup de la landing: el cliente entra en
+                  // verde WhatsApp, el CRM contesta con el lavado del acento.
+                  "max-w-[85%] rounded-[14px] border px-3 pb-1.5 pt-2 text-[13.5px] leading-[1.45] shadow-sm sm:max-w-[64%]",
                   out
-                    ? "border border-brand-soft bg-bubble-out text-bubble-out-text"
-                    : "bg-background",
+                    ? "border-bubble-out-border bg-bubble-out text-bubble-out-text"
+                    : "border-bubble-in-border bg-bubble-in",
                   !grouped && (out ? "rounded-tr-[5px]" : "rounded-tl-[5px]")
                 )}
               >
@@ -269,7 +271,7 @@ export function MessageThread({ messages }: { messages: MessageDto[] }) {
                       <Smartphone className="h-3 w-3" strokeWidth={1.7} /> Celular
                     </span>
                   )}
-                  <span className="text-[10.5px] text-text-4">
+                  <span className="font-mono text-[10px] tracking-[0.04em] text-text-3">
                     {bubbleTime(m.createdAt)}
                   </span>
                   {out && <StatusTicks status={m.status} />}

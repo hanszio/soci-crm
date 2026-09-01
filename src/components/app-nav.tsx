@@ -19,6 +19,7 @@ import { cn, initials } from "@/lib/utils";
 import { signOut } from "@/lib/auth/client";
 import { useEvents } from "@/components/use-events";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { BrandLogo } from "@/components/brand-mark";
 import { APP_VERSION, BUILD_COMMIT, versionLabel } from "@/lib/version";
 
 const NAV = [
@@ -28,6 +29,19 @@ const NAV = [
   { href: "/agent", label: "Agente", icon: Sparkles },
   { href: "/lab", label: "Laboratorio", icon: FlaskConical },
 ] as const;
+
+/**
+ * Un renglón del menú, como el `side-item` del mockup de la landing: texto
+ * semibold, esquinas de 9px y, activo, lavado del acento con tinta azul.
+ */
+function navItemClass(active: boolean) {
+  return cn(
+    "flex items-center gap-[10px] rounded-sm px-2.5 py-2.5 text-[13.5px] font-semibold transition-colors lg:py-2",
+    active
+      ? "bg-brand-tint text-brand-text"
+      : "text-text-2 hover:bg-accent hover:text-foreground"
+  );
+}
 
 export function AppNav({
   branding,
@@ -74,6 +88,7 @@ export function AppNav({
   });
 
   const sha = commit || BUILD_COMMIT;
+  const settingsActive = pathname.startsWith("/settings");
 
   return (
     <aside
@@ -88,29 +103,21 @@ export function AppNav({
         open ? "visible translate-x-0 shadow-pop" : "invisible -translate-x-full"
       )}
     >
-      {/* Brand white-label */}
-      <div className="mb-4 flex items-center gap-2.5 px-2">
+      {/* Marca: el logo de Vocero o, white-label, la inicial y el nombre */}
+      <div className="mb-5 flex items-start gap-1.5 px-2 pt-0.5">
         {/* En móvil el cajón necesita su propio cierre: el velo no siempre es
             alcanzable con el pulgar. */}
         <button
           onClick={onClose}
           aria-label="Cerrar el menú"
-          className="-ml-1 rounded-md p-1.5 text-text-3 hover:bg-accent hover:text-foreground lg:hidden"
+          className="-ml-1 mt-0.5 rounded-md p-1.5 text-text-3 hover:bg-accent hover:text-foreground lg:hidden"
         >
           <X className="h-[18px] w-[18px]" strokeWidth={1.8} />
         </button>
-        <span
-          className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-sm bg-brand text-[15px] font-bold text-brand-fg"
-          aria-hidden
-        >
-          {branding.name.charAt(0).toUpperCase()}
-        </span>
-        <span className="min-w-0">
-          <span className="block truncate text-[16px] font-[650] leading-tight tracking-tight">
-            {branding.name}
-          </span>
-          <span className="block text-[11px] text-text-3">CRM · WhatsApp</span>
-        </span>
+        <div className="min-w-0">
+          <BrandLogo branding={branding} />
+          <span className="kicker mt-2 block">CRM · WhatsApp</span>
+        </div>
       </div>
 
       <nav className="flex flex-col gap-0.5">
@@ -118,28 +125,14 @@ export function AppNav({
           const active =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex items-center gap-[11px] rounded-sm px-2.5 py-2.5 text-sm font-medium transition-colors lg:py-2",
-                active
-                  ? "bg-brand-tint font-semibold text-brand-text"
-                  : "text-text-2 hover:bg-accent"
-              )}
-            >
+            <Link key={item.href} href={item.href} className={navItemClass(active)}>
               <item.icon
-                className={cn("h-[18px] w-[18px]", active ? "text-brand" : "text-text-3")}
-                strokeWidth={1.7}
+                className={cn("h-[17px] w-[17px]", active ? "text-brand" : "text-text-3")}
+                strokeWidth={1.8}
               />
               <span className="flex-1">{item.label}</span>
               {"badge" in item && item.badge && unread > 0 && (
-                <span
-                  className={cn(
-                    "flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10.5px] font-semibold",
-                    active ? "bg-brand text-brand-fg" : "bg-border-strong text-text-2"
-                  )}
-                >
+                <span className="flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand px-1.5 text-[10.5px] font-bold text-brand-fg">
                   {unread}
                 </span>
               )}
@@ -150,32 +143,21 @@ export function AppNav({
 
       <div className="flex-1" />
 
-      <Link
-        href="/settings"
-        className={cn(
-          "flex items-center gap-[11px] rounded-sm px-2.5 py-2 text-sm font-medium transition-colors",
-          pathname.startsWith("/settings")
-            ? "bg-brand-tint font-semibold text-brand-text"
-            : "text-text-2 hover:bg-accent"
-        )}
-      >
+      <Link href="/settings" className={navItemClass(settingsActive)}>
         <Settings
-          className={cn(
-            "h-[18px] w-[18px]",
-            pathname.startsWith("/settings") ? "text-brand" : "text-text-3"
-          )}
-          strokeWidth={1.7}
+          className={cn("h-[17px] w-[17px]", settingsActive ? "text-brand" : "text-text-3")}
+          strokeWidth={1.8}
         />
         Ajustes
       </Link>
 
       <div className="mt-1 flex items-center gap-2.5 rounded-sm px-2.5 py-2 hover:bg-accent">
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand-text">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-soft text-xs font-bold text-brand-text">
           {initials(userName)}
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[13px] font-semibold">{userName}</span>
-          <span className="block text-[11px] text-text-3">
+          <span className="block truncate text-[11px] text-text-3">
             {role === "owner" ? "Propietario" : "Equipo"} · En línea
           </span>
         </span>
@@ -197,13 +179,13 @@ export function AppNav({
       {/* Qué versión está corriendo. Discreta pero siempre visible: la duda
           "¿ya se desplegó?" aparece justo cuando algo no funciona, y mandar a
           alguien a comparar commits en el servidor significa que no lo hará. */}
-      {/* `text-2` y no `text-3`: a 11px, el gris más claro se queda en 3.2:1
-          contra el fondo de la barra y no pasa AA. Discreta sí, ilegible no. */}
+      {/* `text-2` y no `text-3`: a 10.5px, el gris más claro no pasa AA contra
+          el fondo de la barra. Discreta sí, ilegible no. */}
       {/* El nombre sale de la marca, no de una constante: esto es white-label,
           y una instancia rebautizada que dice "Vocero" en el tooltip delata el
           producto de debajo justo donde el operador la mira todos los días. */}
       <p
-        className="mt-1.5 px-2.5 text-[11px] tabular-nums text-text-2"
+        className="mt-2 px-2.5 font-mono text-[10.5px] tracking-[0.06em] text-text-2"
         title={
           sha
             ? `${branding.name} ${APP_VERSION}, construido del commit ${sha}`

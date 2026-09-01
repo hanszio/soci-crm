@@ -198,7 +198,7 @@ function Header({
   return (
     <header className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3 sm:px-6 sm:py-4">
       <div>
-        <h2 className="flex items-center gap-2 font-semibold">
+        <h2 className="flex items-center gap-2 text-[17px] font-bold tracking-tight">
           <FlaskConical className="h-4 w-4 text-primary" /> Laboratorio
         </h2>
         <p className="text-xs text-muted-foreground">
@@ -224,7 +224,7 @@ function HistoryList({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      <p className="kicker">
         Historial
       </p>
       {runs.length === 0 && (
@@ -234,8 +234,8 @@ function HistoryList({
         <button
           key={run.id}
           onClick={() => onSelect(run.id)}
-          className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent/50 ${
-            selectedRunId === run.id ? "border-primary/50 bg-accent/60" : "bg-card"
+          className={`w-full rounded-lg border p-3 text-left transition-colors hover:bg-accent ${
+            selectedRunId === run.id ? "border-brand bg-brand-tint" : "border-border-strong bg-card"
           }`}
         >
           <div className="flex items-center justify-between">
@@ -369,8 +369,8 @@ function CaseCard({ testCase, onApplied }: { testCase: Case; onApplied: () => vo
           {c.hallazgos.map((h, i) => (
             <HallazgoCard key={i} hallazgo={h} caseId={c.id} index={i} onApplied={onApplied} />
           ))}
-          <div className="rounded-md border bg-background/40 p-3">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <div className="rounded-md border bg-background p-3">
+            <p className="mb-2 kicker">
               Transcript
             </p>
             <div className="space-y-1.5 text-sm">

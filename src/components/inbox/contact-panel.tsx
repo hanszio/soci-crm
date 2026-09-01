@@ -152,9 +152,7 @@ export function ContactPanel({
   return (
     <div className="flex h-full flex-col">
       <header className="sticky top-0 flex items-center justify-between border-b bg-background px-4 py-3">
-        <h3 className="text-[13px] font-[650] uppercase tracking-wide text-text-2">
-          Detalles
-        </h3>
+        <h3 className="kicker text-text-2">Detalles</h3>
         <button
           onClick={onClose}
           aria-label="Ocultar panel"
@@ -174,7 +172,7 @@ export function ContactPanel({
               size="md"
             />
             <div className="min-w-0">
-              <p className="truncate text-sm font-[650]">
+              <p className="truncate text-sm font-bold tracking-tight">
                 {conversation.contact.name}
               </p>
               <p className="text-xs text-text-3">
@@ -203,7 +201,7 @@ export function ContactPanel({
             </div>
           )}
 
-          <div className="mt-3 rounded-md border bg-secondary/50 px-3 py-2.5">
+          <div className="mt-3 rounded-md border bg-subtle px-3 py-2.5">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="text-[13px] font-medium">IA en esta conversación</p>
@@ -267,9 +265,7 @@ export function ContactPanel({
         {/* Stepper de etapa */}
         {stages.length > 0 && leadId && (
           <section className="border-b p-4">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-              Etapa del pipeline
-            </p>
+            <p className="kicker mb-3">Etapa del pipeline</p>
             <ol>
               {stages.map((s, i) => {
                 const done = currentIndex >= 0 && i < currentIndex;
@@ -318,9 +314,7 @@ export function ContactPanel({
 
         {/* Notas */}
         <section className="p-4">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">
-            Notas
-          </p>
+          <p className="kicker mb-2">Notas</p>
           <Textarea
             rows={5}
             placeholder="Notas internas sobre este contacto…"

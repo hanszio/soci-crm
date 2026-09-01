@@ -176,7 +176,7 @@ function ConnectForm({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-3 rounded-md border bg-background/40 p-4 text-sm">
+        <div className="grid gap-3 rounded-md border bg-background p-4 text-sm">
           <p className="font-medium">¿De dónde sale el token?</p>
           <div className="grid gap-3 md:grid-cols-2">
             <div className="rounded-md border p-3">
@@ -303,7 +303,7 @@ function WebhookCard({ webhook }: { webhook: WebhookInfo }) {
         <div className="space-y-1.5">
           <Label>URL del webhook (callback URL)</Label>
           <div className="flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded-md border bg-background/60 px-3 py-2 text-xs">
+            <code className="min-w-0 flex-1 truncate rounded-md border bg-background px-3 py-2 text-xs">
               {webhook.url}
             </code>
             <Button
@@ -326,7 +326,7 @@ function WebhookCard({ webhook }: { webhook: WebhookInfo }) {
         <div className="space-y-1.5">
           <Label>Verify token</Label>
           <div className="flex items-center gap-2">
-            <code className="min-w-0 flex-1 truncate rounded-md border bg-background/60 px-3 py-2 text-xs">
+            <code className="min-w-0 flex-1 truncate rounded-md border bg-background px-3 py-2 text-xs">
               {webhook.verifyToken}
             </code>
             <Button

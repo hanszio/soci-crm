@@ -6,6 +6,7 @@ import { Menu } from "lucide-react";
 import type { Branding } from "@/lib/branding";
 import type { ThemePreference } from "@/lib/theme";
 import { AppNav } from "@/components/app-nav";
+import { BrandLogo } from "@/components/brand-mark";
 
 /**
  * Cascarón de la app en dos modos:
@@ -75,7 +76,7 @@ export function AppShell({
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-2 lg:hidden">
+        <header className="flex h-12 shrink-0 items-center gap-1.5 border-b bg-subtle px-2 lg:hidden">
           <button
             onClick={() => setNavOpen(true)}
             aria-label="Abrir el menú"
@@ -84,15 +85,7 @@ export function AppShell({
           >
             <Menu className="h-5 w-5" strokeWidth={1.8} />
           </button>
-          <span
-            className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-sm bg-brand text-[13px] font-bold text-brand-fg"
-            aria-hidden
-          >
-            {branding.name.charAt(0).toUpperCase()}
-          </span>
-          <span className="truncate text-[15px] font-[650] tracking-tight">
-            {branding.name}
-          </span>
+          <BrandLogo branding={branding} className="min-w-0" />
         </header>
 
         <main className="min-h-0 min-w-0 flex-1 overflow-hidden">{children}</main>

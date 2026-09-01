@@ -116,7 +116,7 @@ export function TemplateSender({
         </select>
       </div>
       {selected && (
-        <p className="rounded-md bg-secondary/60 p-2.5 text-xs text-muted-foreground">
+        <p className="rounded-md bg-subtle p-2.5 text-xs text-muted-foreground">
           {selected.body}
         </p>
       )}

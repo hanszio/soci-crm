@@ -73,7 +73,7 @@ export function AgentClient() {
   return (
     <div className="h-full overflow-y-auto">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3 sm:px-6 sm:py-4">
-        <h2 className="font-semibold">Agente de IA</h2>
+        <h2 className="text-[17px] font-bold tracking-tight">Agente de IA</h2>
         <div className="flex items-center gap-3">
           {saved && <span className="text-xs text-primary">Guardado ✓</span>}
           <span className="text-sm text-muted-foreground">

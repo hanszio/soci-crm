@@ -107,7 +107,7 @@ export function LeadDrawer({
         className="fixed inset-y-0 right-0 z-50 flex w-[min(360px,92vw)] flex-col border-l bg-background shadow-pop"
       >
         <header className="flex items-center justify-between border-b px-4 py-3">
-          <h3 className="text-[13px] font-[650] uppercase tracking-wide text-text-2">
+          <h3 className="kicker text-text-2">
             Trato
           </h3>
           <button
@@ -152,7 +152,7 @@ export function LeadDrawer({
 
           {/* Cuánto */}
           <section className="border-b p-4">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+            <p className="mb-2 kicker">
               Monto ({moneda})
             </p>
             {editandoMonto ? (
@@ -219,7 +219,7 @@ export function LeadDrawer({
 
           {/* A quién llamar primero */}
           <section className="border-b p-4">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+            <p className="mb-2 kicker">
               Prioridad
             </p>
             <PriorityPicker value={lead.priority} onChange={onPriority} />
@@ -227,7 +227,7 @@ export function LeadDrawer({
 
           {/* Dónde va */}
           <section className="border-b p-4">
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-text-3">
+            <p className="mb-2 kicker">
               Etapa
             </p>
             <div className="flex flex-wrap gap-1.5">

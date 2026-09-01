@@ -79,7 +79,7 @@ export function StartConversation({
 
   if (templates.length === 0) {
     return (
-      <div className="rounded-md border border-dashed bg-secondary/30 px-3 py-2.5">
+      <div className="rounded-md border border-dashed bg-subtle px-3 py-2.5">
         <p className="text-[13px]">
           Esta persona nunca te ha escrito, así que WhatsApp solo permite
           contactarla con una <strong>plantilla aprobada</strong>, y todavía no
@@ -116,7 +116,7 @@ export function StartConversation({
       </select>
 
       {elegida && (
-        <p className="rounded-md border bg-secondary/40 px-3 py-2 text-[12px] text-text-2">
+        <p className="rounded-md border bg-subtle px-3 py-2 text-[12px] text-text-2">
           {elegida.body}
         </p>
       )}

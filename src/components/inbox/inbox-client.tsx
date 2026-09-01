@@ -313,16 +313,17 @@ export function InboxClient({ channels }: { channels: readonly Channel[] }) {
                   size="md"
                 />
                 <div className="min-w-0">
-                  <p className="flex min-w-0 items-center gap-1.5 text-[15px] font-[650] leading-tight">
+                  <p className="flex min-w-0 items-center gap-1.5 text-[15px] font-bold leading-tight tracking-tight">
                     {multiChannel && <ChannelBadge channel={selected.channel} />}
                     <span className="truncate">{selected.contact.name}</span>
                   </p>
                   <p
-                    className={
+                    className={cn(
+                      "mt-0.5 font-mono text-[10.5px] tracking-[0.04em]",
                       selected.windowOpen
-                        ? "text-xs font-medium text-success"
-                        : "text-xs text-text-3"
-                    }
+                        ? "font-medium text-success-text"
+                        : "text-text-3"
+                    )}
                   >
                     {selected.windowOpen
                       ? "ventana abierta"
@@ -338,7 +339,7 @@ export function InboxClient({ channels }: { channels: readonly Channel[] }) {
                 <button
                   onClick={() => togglePanel(true)}
                   aria-label="Mostrar detalles"
-                  className="shrink-0 rounded-sm border p-1.5 text-text-3 hover:bg-accent hover:text-foreground"
+                  className="shrink-0 rounded-full border border-border-strong p-1.5 text-text-3 transition-colors hover:border-text-3 hover:text-foreground"
                 >
                   <PanelRight className="h-4 w-4" strokeWidth={1.7} />
                 </button>
@@ -356,8 +357,11 @@ export function InboxClient({ channels }: { channels: readonly Channel[] }) {
             />
           </>
         ) : (
-          <div className="flex flex-1 items-center justify-center bg-chat text-sm text-text-3">
-            Elige una conversación para ver el hilo
+          <div className="thread-bg flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
+            <p className="font-serif text-[24px] italic leading-tight text-text-2">
+              Elige una conversación para ver el hilo
+            </p>
+            <p className="kicker">Bandeja · tiempo real</p>
           </div>
         )}
       </section>
@@ -374,7 +378,7 @@ export function InboxClient({ channels }: { channels: readonly Channel[] }) {
 
       <section
         className={cn(
-          "shrink-0 overflow-hidden border-l transition-[width] duration-[220ms]",
+          "shrink-0 overflow-hidden border-l transition-[width] duration-200",
           // Debajo de xl no hay ancho para una tercera columna: el panel se
           // vuelve un cajón que entra desde la derecha, encima del hilo.
           "max-xl:fixed max-xl:inset-y-0 max-xl:right-0 max-xl:z-40 max-xl:w-auto max-xl:bg-background max-xl:transition-transform",

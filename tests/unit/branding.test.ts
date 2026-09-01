@@ -3,12 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   ACCENT_PRESETS,
   accentCssVariables,
+  DEFAULT_BRANDING,
   isValidHex,
   normalizeBranding,
   resolveAccentSet,
 } from "@/lib/branding";
 
-const DARK_BG = "#101115";
+const DARK_BG = "#0b1327";
 
 /** Contraste WCAG entre dos hex, para afirmar sobre legibilidad y no sobre
  *  valores concretos: lo que importa es que se LEA, no que dé cierto color. */
@@ -45,8 +46,20 @@ describe("white-label: acento", () => {
     expect(lum).toBeLessThan(0xd0);
   });
 
-  it("hex inválido cae al default", () => {
-    expect(resolveAccentSet("rojo")).toEqual(ACCENT_PRESETS["#3f5972"]!.set);
+  it("hex inválido cae al default (el azul Vocero)", () => {
+    expect(resolveAccentSet("rojo")).toEqual(ACCENT_PRESETS["#0d5bff"]!.set);
+  });
+
+  it("el azul Vocero es el default y trae los valores exactos de la landing", () => {
+    expect(DEFAULT_BRANDING.accent).toBe("#0d5bff");
+    expect(resolveAccentSet(DEFAULT_BRANDING.accent)).toEqual({
+      accent: "#0d5bff",
+      hover: "#0a4de6",
+      soft: "#d3e2ff",
+      tint: "#ebf1ff",
+      text: "#0038d8",
+      fg: "#ffffff",
+    });
   });
 });
 
@@ -75,7 +88,7 @@ describe("white-label: acento en tema oscuro", () => {
 
   it("hex inválido en oscuro también cae al acento por defecto", () => {
     expect(resolveAccentSet("rojo", "dark")).toEqual(
-      resolveAccentSet("#3f5972", "dark")
+      resolveAccentSet("#0d5bff", "dark")
     );
   });
 
@@ -106,7 +119,7 @@ describe("white-label: normalización", () => {
   });
 
   it("acento inválido → default", () => {
-    expect(normalizeBranding({ accent: "azul" }).accent).toBe("#3f5972");
+    expect(normalizeBranding({ accent: "azul" }).accent).toBe("#0d5bff");
     expect(normalizeBranding({ accent: "#3F6B66" }).accent).toBe("#3f6b66");
   });
 });

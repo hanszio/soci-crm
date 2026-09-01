@@ -46,13 +46,23 @@ export type Branding = {
 
 export const DEFAULT_BRANDING: Branding = {
   name: "Vocero",
-  accent: "#3f5972",
+  // El azul eléctrico de vocerocrm.com: la instancia recién instalada se ve
+  // igual que la landing. Una agencia lo cambia en Configuración → Marca.
+  accent: "#0d5bff",
   currency: DEFAULT_CURRENCY,
   favicon: null,
 };
 
-/** Presets del handoff (valores exactos). */
+/**
+ * Presets. El primero es la marca Vocero (valores exactos de la landing); los
+ * demás son los tonos sobrios del handoff Atlas, que siguen disponibles para
+ * quien quiera un CRM más discreto.
+ */
 export const ACCENT_PRESETS: Record<string, { label: string; set: AccentSet }> = {
+  "#0d5bff": {
+    label: "Azul Vocero",
+    set: { accent: "#0d5bff", hover: "#0a4de6", soft: "#d3e2ff", tint: "#ebf1ff", text: "#0038d8", fg: "#ffffff" },
+  },
   "#3f5972": {
     label: "Azul acero",
     set: { accent: "#3f5972", hover: "#334a60", soft: "#dde5ee", tint: "#f3f6f9", text: "#2b4056", fg: "#ffffff" },
@@ -122,7 +132,7 @@ function contrast(a: Rgb, b: Rgb): number {
 }
 
 /** Fondo de referencia del tema oscuro (debe seguir a `--bg` de globals.css). */
-const DARK_BG: Rgb = { r: 0x10, g: 0x11, b: 0x15 };
+const DARK_BG: Rgb = { r: 0x0b, g: 0x13, b: 0x27 };
 
 /**
  * Set completo para cualquier acento, según el tema.
@@ -142,7 +152,7 @@ export function resolveAccentSet(
   if (mode === "light") {
     const preset = ACCENT_PRESETS[accentHex.toLowerCase()];
     if (preset) return preset.set;
-    if (!isValidHex(accentHex)) return ACCENT_PRESETS["#3f5972"]!.set;
+    if (!isValidHex(accentHex)) return ACCENT_PRESETS[DEFAULT_BRANDING.accent]!.set;
 
     let base = hexToRgb(accentHex.toLowerCase());
     // contraste con blanco = (1.05) / (L + 0.05); exigir ≥ 3

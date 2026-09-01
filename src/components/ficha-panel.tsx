@@ -65,7 +65,7 @@ export function FichaPanel({
   return (
     <section className="border-b p-4">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-text-3">
+        <p className="kicker">
           Ficha
         </p>
         {!agregando && (

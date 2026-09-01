@@ -173,7 +173,7 @@ export function PipelineClient() {
   return (
     <div className="flex h-full flex-col">
       <header className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3 sm:px-6 sm:py-4">
-        <h2 className="font-semibold">Pipeline</h2>
+        <h2 className="text-[17px] font-bold tracking-tight">Pipeline</h2>
         <Button variant="outline" size="sm" onClick={() => setManaging(true)}>
           <Settings2 className="h-4 w-4" /> Gestionar etapas
         </Button>
@@ -307,19 +307,19 @@ function StageColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex h-full w-64 shrink-0 snap-start flex-col rounded-lg border bg-card/50",
-        isOver && "ring-2 ring-primary/60"
+        "flex h-full w-64 shrink-0 snap-start flex-col rounded-lg border border-border-strong bg-subtle transition-[box-shadow,border-color]",
+        isOver && "border-brand ring-[3px] ring-brand-soft"
       )}
     >
       <div className="flex items-center justify-between px-3 py-2.5">
-        <span className="flex items-center gap-1.5 text-sm font-semibold">
+        <span className="flex items-center gap-1.5 text-[13.5px] font-bold tracking-tight">
           {stage.kind === "won" && <Trophy className="h-3.5 w-3.5 text-primary" />}
           {stage.kind === "lost" && (
             <XCircle className="h-3.5 w-3.5 text-muted-foreground" />
           )}
           {stage.name}
         </span>
-        <span className="rounded-full bg-secondary px-2 py-0.5 text-xs text-muted-foreground">
+        <span className="rounded-full border border-border-strong bg-background px-2 py-0.5 font-mono text-[11px] text-text-3">
           {leads.length}
         </span>
       </div>
@@ -425,15 +425,15 @@ function LeadCard({
   return (
     <div
       className={cn(
-        "cursor-grab rounded-md border bg-card p-3 shadow-sm",
-        overlay && "rotate-2 shadow-xl"
+        "cursor-grab rounded-md border border-border-strong bg-card p-3 shadow-sm transition-shadow hover:shadow-md",
+        overlay && "rotate-2 shadow-pop"
       )}
     >
       <div className="flex items-center gap-2.5">
         <ContactAvatar name={lead.contact.name} seed={lead.contact.id} size="sm" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
-            <p className="truncate text-sm font-medium">{lead.contact.name}</p>
+            <p className="truncate text-sm font-semibold">{lead.contact.name}</p>
             {lead.priority && <PriorityBadge value={lead.priority} />}
           </div>
           <p className="text-[11px] text-muted-foreground">

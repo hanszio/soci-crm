@@ -2,10 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ACCENT_PRESETS, isValidHex, resolveAccentSet, type Branding } from "@/lib/branding";
+import {
+  ACCENT_PRESETS,
+  DEFAULT_BRANDING,
+  isValidHex,
+  resolveAccentSet,
+  type Branding,
+} from "@/lib/branding";
 import { CURRENCIES, DEFAULT_CURRENCY, type Currency } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { useResolvedTheme } from "@/components/use-theme";
+import { BrandLogo } from "@/components/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,7 +22,7 @@ export function BrandingClient() {
   const router = useRouter();
   const mode = useResolvedTheme();
   const [name, setName] = useState("");
-  const [accent, setAccent] = useState("#3f5972");
+  const [accent, setAccent] = useState<string>(DEFAULT_BRANDING.accent);
   const [currency, setCurrency] = useState<Currency>(DEFAULT_CURRENCY);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -120,8 +127,8 @@ export function BrandingClient() {
                   className={cn(
                     "flex items-center gap-2 rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition-colors",
                     accent.toLowerCase() === hex
-                      ? "border-foreground/40 bg-secondary"
-                      : "hover:bg-accent"
+                      ? "border-text-2 bg-secondary"
+                      : "border-border-strong hover:bg-accent"
                   )}
                 >
                   <span
@@ -134,12 +141,12 @@ export function BrandingClient() {
               <label
                 className={cn(
                   "flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition-colors",
-                  !isPreset ? "border-foreground/40 bg-secondary" : "hover:bg-accent"
+                  !isPreset ? "border-text-2 bg-secondary" : "border-border-strong hover:bg-accent"
                 )}
               >
                 <input
                   type="color"
-                  value={isValidHex(accent) ? accent : "#3f5972"}
+                  value={isValidHex(accent) ? accent : DEFAULT_BRANDING.accent}
                   onChange={(e) => setAccent(e.target.value)}
                   className="h-4 w-4 cursor-pointer appearance-none border-0 bg-transparent p-0"
                 />
@@ -152,26 +159,30 @@ export function BrandingClient() {
             </p>
           </div>
 
-          {/* Vista previa */}
-          <div className="rounded-md border p-4" style={{ background: previewSet.tint }}>
+          {/* Vista previa. Los tokens del acento se sobreescriben SOLO dentro
+              de esta caja, así la marca y el botón se pintan con el color que
+              se está eligiendo (aún sin guardar) y con los mismos componentes
+              que la barra lateral real. */}
+          <div
+            className="rounded-md border border-border-strong bg-brand-tint p-4"
+            style={
+              {
+                "--accent": previewSet.accent,
+                "--accent-hover": previewSet.hover,
+                "--accent-soft": previewSet.soft,
+                "--accent-tint": previewSet.tint,
+                "--accent-text": previewSet.text,
+                "--accent-fg": previewSet.fg,
+              } as React.CSSProperties
+            }
+          >
             <div className="flex items-center gap-2.5">
-              <span
-                className="flex h-[30px] w-[30px] items-center justify-center rounded-sm text-[15px] font-bold"
-                style={{ background: previewSet.accent, color: previewSet.fg }}
-              >
-                {(name.trim() || "Vocero").charAt(0).toUpperCase()}
-              </span>
-              <span>
-                <span className="block text-[15px] font-[650] leading-tight">
-                  {name.trim() || "Vocero"}
-                </span>
-                <span className="block text-[11px] text-text-3">CRM · WhatsApp</span>
-              </span>
+              <div className="min-w-0">
+                <BrandLogo branding={{ name: name.trim() || DEFAULT_BRANDING.name }} />
+                <span className="kicker mt-1.5 block">CRM · WhatsApp</span>
+              </div>
               <span className="flex-1" />
-              <span
-                className="rounded-md px-3 py-1.5 text-xs font-medium"
-                style={{ background: previewSet.accent, color: previewSet.fg }}
-              >
+              <span className="rounded-full bg-brand px-3.5 py-1.5 text-xs font-semibold text-brand-fg shadow-sm">
                 Botón de ejemplo
               </span>
             </div>
