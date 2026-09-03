@@ -135,8 +135,14 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     return;
   }
 
-  // Patrón de respaldo ANTES del LLM (FR-022).
+  // Patrón de respaldo ANTES del LLM (FR-022). Avisa al cliente antes de
+  // callarse: un handoff mudo se ve como "no me respondieron".
   if (lastInbound.text && matchesHandoffIntent(lastInbound.text)) {
+    try {
+      await deliverReply(conversation, HANDOFF_FAREWELL);
+    } catch (err) {
+      console.error("[agente] no se pudo enviar la despedida del handoff:", err);
+    }
     await applyHandoff(conversationId, organizationId, "cliente");
     return;
   }
@@ -252,6 +258,9 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     }
   }
 }
+
+/** Texto fijo al escalar por la regex de respaldo (sin pasar por el modelo). */
+const HANDOFF_FAREWELL = "Claro, te paso con un asesor ahora mismo. En un momento te atiende.";
 
 type Conversation = typeof schema.conversation.$inferSelect;
 
