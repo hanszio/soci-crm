@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { chatJson, extractJson } from "@/lib/ai";
+import { resetBreakers } from "@/lib/ai/fallback";
 
 describe("extractJson (extracción robusta)", () => {
   it("JSON limpio", () => {
@@ -26,6 +27,7 @@ describe("chatJson (reintentos y errores tipados)", () => {
   const schema = z.object({ action: z.literal("reply"), text: z.string() });
 
   beforeEach(() => {
+    resetBreakers();
     vi.stubEnv("APP_BASE_URL", "http://localhost:3000");
     vi.stubEnv("DATABASE_URL", "postgresql://t:t@localhost:5432/t");
     vi.stubEnv("BETTER_AUTH_SECRET", "secret-de-test-suficiente");

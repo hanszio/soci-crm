@@ -26,6 +26,24 @@ const envSchema = z.object({
   OPENROUTER_BASE_URL: z.string().url().default("https://openrouter.ai/api"),
   OPENROUTER_MODEL: z.string().optional(),
   OPENROUTER_JUDGE_MODEL: z.string().optional(),
+  // T1.1 — proveedores de IA por Vercel AI SDK. Modelo en formato
+  // `proveedor/modelo` (anthropic/claude-sonnet-4-5, openai/gpt-5-mini,
+  // google/gemini-2.5-flash, openrouter/anthropic/claude-sonnet-4.5,
+  // compat/llama-3.3-70b-versatile). Sin AI_MODEL se deriva de OPENROUTER_*.
+  AI_MODEL: z.string().optional(),
+  AI_JUDGE_MODEL: z.string().optional(),
+  AI_GATE_MODEL: z.string().optional(),
+  AI_EMBED_MODEL: z.string().optional(),
+  // Candidatos de respaldo, separados por coma, en orden.
+  AI_FALLBACK: z.string().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
+  // API compatible con OpenAI (Groq, DeepSeek, Ollama, OpenCode Zen…):
+  // URL base SIN /chat/completions, p. ej. https://api.groq.com/openai/v1
+  AI_COMPAT_BASE_URL: z.string().url().optional(),
+  AI_COMPAT_API_KEY: z.string().optional(),
   // 014/017: canales encendidos, separados por coma. WhatsApp siempre esta on.
   // Ej.: CHANNELS=whatsapp,instagram,messenger. Sin ella, la instancia es solo
   // WhatsApp y las superficies de los demas canales responden 404.
@@ -108,8 +126,22 @@ export function isMockEnabled(): boolean {
   );
 }
 
-/** true si hay proveedor de IA configurado (token presente y no vacío). */
+/**
+ * true si la PLATAFORMA tiene algún proveedor de IA configurado por entorno.
+ * Una organización puede tener el suyo propio (Ajustes → IA) aunque esto sea
+ * false: para eso está `isAiAvailable(organizationId)` en `lib/ai`.
+ */
 export function isAiConfigured(): boolean {
-  const token = process.env.OPENROUTER_API_TOKEN;
-  return typeof token === "string" && token.trim().length > 0;
+  const has = (k: string) => {
+    const v = process.env[k];
+    return typeof v === "string" && v.trim().length > 0;
+  };
+  return (
+    has("OPENROUTER_API_TOKEN") ||
+    has("OPENROUTER_API_KEY") ||
+    has("ANTHROPIC_API_KEY") ||
+    has("OPENAI_API_KEY") ||
+    has("GOOGLE_GENERATIVE_AI_API_KEY") ||
+    (has("AI_COMPAT_BASE_URL") && has("AI_MODEL"))
+  );
 }
