@@ -3,7 +3,7 @@ import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
 import { moveLeadToStage as moveLeadThroughHistory } from "@/server/leads/stage-history";
-import { getEnv, isAiConfigured } from "@/lib/env";
+import { getEnv } from "@/lib/env";
 import { chatJson, type ChatMessage } from "@/lib/ai";
 import { publish } from "@/server/events/bus";
 import { isWindowOpen } from "@/server/inbox/window";
@@ -92,7 +92,8 @@ async function executeTurn(conversationId: string): Promise<void> {
  * debounce 0 y sin pasar por el coalesce).
  */
 export async function runAgentTurn(conversationId: string): Promise<void> {
-  if (!isAiConfigured()) return;
+  // La disponibilidad de IA se resuelve por organización dentro de chatJson
+  // (Ajustes → IA o plataforma): `not_configured` termina el turno en silencio.
 
   const db = getDb();
   const convRows = await db
@@ -165,7 +166,10 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
       })),
   ];
 
-  const result = await chatJson(agentActionSchema(agenda), messages);
+  const result = await chatJson(agentActionSchema(agenda), messages, {
+    organizationId,
+    kind: "chat",
+  });
   if (!result.ok) {
     if (result.error === "not_configured") return;
     // Fallo persistente del proveedor o salida imposible → escalar (FR-022).

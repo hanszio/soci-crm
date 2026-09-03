@@ -74,6 +74,29 @@ agrupa ráfagas de mensajes en una respuesta, escala a humano cuando el cliente
 lo pide (con detección de respaldo), cuando él lo decide o cuando algo falla.
 Proveedor LLM por adaptador OpenRouter-compatible: usa el modelo que quieras.
 
+
+### 🔑 Proveedores de IA: Anthropic, OpenAI, Google, OpenRouter o cualquiera compatible
+
+El agente habla con los proveedores por Vercel AI SDK. Dos formas de configurarlo:
+
+- **Por organización, desde la app** — Ajustes → **IA**: elige proveedor, pega tu
+  clave (se guarda cifrada), escoge modelo principal y juez, **prueba la
+  conexión** y guarda. Esa configuración tiene prioridad sobre la de la
+  plataforma para esa organización. Solo dueño y administradores.
+- **Para toda la plataforma, por variables** (`.env.example`): `AI_MODEL`
+  en formato `proveedor/modelo` (`anthropic/claude-sonnet-4-5`,
+  `openai/gpt-5-mini`, `google/gemini-2.5-flash`,
+  `openrouter/anthropic/claude-sonnet-4.5`, `compat/llama-3.3-70b-versatile`),
+  la clave de cada proveedor (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+  `GOOGLE_GENERATIVE_AI_API_KEY`, `OPENROUTER_API_KEY`, `AI_COMPAT_BASE_URL` +
+  `AI_COMPAT_API_KEY` para Groq, DeepSeek, Ollama, OpenCode Zen…) y, opcional,
+  `AI_FALLBACK=openai/gpt-5-mini,google/gemini-2.5-flash`: si el primero falla
+  (sin créditos, 429, caída), pasa al siguiente con un circuit breaker.
+
+La configuración original `OPENROUTER_API_TOKEN` + `OPENROUTER_MODEL` sigue
+funcionando tal cual. Cada llamada queda registrada en `usage_event` (tokens,
+latencia, resultado) por organización.
+
 ### 🔌 Trae tu propio agente
 
 Si prefieres conducir la conversación con tu propio cerebro —un microservicio
