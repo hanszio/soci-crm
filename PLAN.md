@@ -139,7 +139,7 @@ depende_de: [T0.2]
 | Fase | Objetivo | Tareas paralelas | Días | Modelos |
 |---|---|---|---|---|
 | 0 | Base en producción y preparación del repo | 5 (QA + Codex) | 1–2 | Codex ×2 |
-| 1 | Núcleo del agente | 4 + 1 secuencial | 4 | Opus ×2, Sonnet, Codex ×2 |
+| 1 | Núcleo del agente | 5 + 1 secuencial | 5 | Opus ×2, Sonnet ×2, Codex ×2 |
 | 2 | Seguridad | 4 + 1 secuencial | 3 | Opus, Sonnet ×2, Codex ×2 |
 | 3 | Multi-empresa y autoservicio | 6 + 1 secuencial | 6 | Opus ×2, Sonnet ×3, Codex ×2 |
 | 4 | Conocimiento documental (RAG) | 4 + 1 secuencial | 5 | Opus, Sonnet, Codex ×3 |
@@ -249,11 +249,15 @@ Contratos compartidos (fijados antes de lanzar, para que las tareas corran en pa
 - Evento de Google: `presencial` → `location: address`, sin `conferenceData`; `videollamada` → como hoy.
 - Aceptación: tests unitarios de `createSessionBooking` por modalidad (3 casos) + E2E `us-agenda.md` ampliado; Ajustes → Agenda permite marcar modalidades y dirección.
 
+### T1.6 · Ajustes → IA: proveedor y clave por organización (BYOK) · **Sonnet** · rama `T1.6-ajustes-ia` · **depende de T1.1**
+
+- Pantalla Ajustes → IA: proveedor (Anthropic, OpenAI, Google, OpenRouter, compatible), clave cifrada (solo últimos 4 visibles), base URL (compat), modelo principal y juez, botón "Probar conexión" antes de guardar, volver a claves de plataforma. Tabla `ai_settings` por organización; `getOrgAiOverride()` la lee y el registro de T1.1 la usa antes que el entorno. Solo owner/admin. Brief completo en `docs/tasks/T1.6.md`.
+
 ### T1.5 · Mocks y E2E de la fase · **Codex** · rama `T1.5-e2e-fase1` · **secuencial, tras merges de T1.1–T1.4**
 
 - Extender `scripts/e2e-selftest.mjs`: escenarios "fallback de proveedor" (ai-mock devuelve 500 en el primer modelo), "retraso instant", "modalidad presencial", "handoff tras cita". Añadir `tests/e2e/us-fase1.md`. CI verde.
 
-**Integración fase 1** (QA): merge T1.1 → T1.2 → T1.3 → T1.4 → T1.5; `pnpm db:generate` (una migración `0013_fase1.sql`); staging; prueba con WhatsApp real: pedir cita, confirmar en Google Calendar, verificar silencio del bot; tag `v0.2.0`.
+**Integración fase 1** (QA): merge T1.1 → T1.2 → T1.3 → T1.4 → T1.6 → T1.5; `pnpm db:generate` (una migración `0013_fase1.sql`); staging; prueba con WhatsApp real: pedir cita, confirmar en Google Calendar, verificar silencio del bot; tag `v0.2.0`.
 
 ---
 
