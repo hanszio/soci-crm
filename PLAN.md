@@ -25,7 +25,7 @@ Criterio de asignación: **Opus** cuando la tarea toca `src/server/ai/pipeline.t
 
 - `main`: protegida, solo merges de QA. Cada merge a `main` = deploy.
 - `phase/N`: rama de integración por fase. Se crea desde `main` al iniciar la fase.
-- `phase/N/T<N>.<k>-<slug>`: una rama por tarea, creada desde `phase/N`. Cada agente trabaja en **su propio git worktree** (`../soci-T3.2`) para que los agentes paralelos no se pisen.
+- `task/T<N>.<k>-<slug>`: una rama por tarea, creada desde `phase/N` (git no permite `phase/N/...` cuando existe la rama `phase/N`). Cada agente trabaja en **su propio git worktree** (`../soci-T3.2`) para que los agentes paralelos no se pisen.
 - PR de tarea → `phase/N`. QA revisa y hace squash-merge. Al cerrar la fase: PR `phase/N` → `main`.
 - Commits: Conventional Commits en español (`feat(agenda): modalidad de cita`). Cuerpo: qué y por qué.
 
@@ -503,6 +503,7 @@ Máximo de agentes simultáneos recomendado: **4** (cada worktree corre su propi
 
 | Riesgo | Mitigación en el plan |
 |---|---|
+| GitHub rechaza PRs desde ramas con puntos (`task/T1.1-…`) | QA integra con `git merge --no-ff` a `phase/N` y deja el detalle en el mensaje del merge; el PR es opcional. |
 | Conflictos en `pipeline.ts` y `prompts.ts` | Solo una tarea por fase los toca (T1.2, T2.1, T4.2, T5.1/T5.3 en orden); las demás entregan funciones puras. QA resuelve conflictos pequeños en integración. |
 | Colisión de migraciones Drizzle | Regla 0.3.1: nadie corre `db:generate`; una migración por fase. |
 | Agente que se sale del alcance | Regla 0.3.7 + lista explícita de archivos; PR rechazado si toca fuera. |

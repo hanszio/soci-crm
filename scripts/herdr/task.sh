@@ -7,7 +7,7 @@ ID="$1"; KIND="$2"; MODEL="$3"; PHASE="$4"
 BRIEF="docs/tasks/$ID.md"
 [ -f "$BRIEF" ] || { echo "falta $BRIEF"; exit 1; }
 SLUG=$(grep -m1 '^slug:' "$BRIEF" | awk '{print $2}')
-BRANCH="phase/$PHASE/$ID-$SLUG"
+BRANCH="task/$ID-$SLUG"
 WT="../soci-$ID"
 NAME=$(echo "$ID" | tr '.' '-' | tr 'A-Z' 'a-z')
 
