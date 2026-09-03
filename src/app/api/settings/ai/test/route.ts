@@ -29,12 +29,12 @@ export const POST = withAuth(async (session, req: Request) => {
   if (!apiKey) return apiError(422, "invalid_body", "Falta la clave del proveedor");
 
   const spec = specFromOverride({ provider: d.provider, apiKey, baseUrl: d.baseUrl ?? null, model: d.model });
-  const probe = await chatText([{ role: "user", content: "Responde solo con: ok" }], {
+  const probe = await chatText([{ role: "user", content: "Responde únicamente con la palabra: ok" }], {
     spec,
     organizationId: session.organizationId,
     kind: "text",
-    maxOutputTokens: 20,
-    timeoutMs: 20_000,
+    maxOutputTokens: 400,
+    timeoutMs: 45_000,
   });
   if (!probe.ok) return apiError(422, "provider_rejected", humanizeProviderError(probe.detail));
   return Response.json({ ok: true, latencyMs: probe.latencyMs, model: probe.model });

@@ -241,9 +241,9 @@ async function callModel(
       latencyMs: Date.now() - started,
       ok: true,
     });
-    const text = res.text;
+    const text = stripThinking(res.text);
     if (typeof text !== "string" || text.length === 0) {
-      throw new Error("respuesta del proveedor sin contenido");
+      throw new Error("respuesta del proveedor sin contenido (¿modelo razonador con pocos tokens de salida?)");
     }
     return text;
   } catch (err) {
@@ -257,6 +257,19 @@ async function callModel(
     });
     throw err;
   }
+}
+
+/**
+ * Algunos modelos razonadores (MiniMax, Kimi, GLM…) devuelven su cadena de
+ * pensamiento dentro del texto entre <think>…</think>. Nunca debe llegar al
+ * cliente ni confundir la extracción de JSON.
+ */
+export function stripThinking(text: string): string {
+  if (!text) return text;
+  let out = text.replace(/<think>[\s\S]*?<\/think>/gi, "");
+  // Bloque abierto sin cerrar (se agotaron los tokens): lo descartamos entero.
+  out = out.replace(/<think>[\s\S]*$/i, "");
+  return out.trim();
 }
 
 /** Traduce el error del SDK a un mensaje corto y decide si abre el breaker. */
