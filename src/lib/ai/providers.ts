@@ -11,6 +11,7 @@ export const AI_PROVIDERS = [
   "openai",
   "google",
   "opencode",
+  "opencode-go",
   "openrouter",
   "compat",
 ] as const;
@@ -49,6 +50,7 @@ export type ProviderInfo = {
 
 export const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 export const OPENCODE_BASE_URL = "https://opencode.ai/zen/v1";
+export const OPENCODE_GO_BASE_URL = "https://opencode.ai/zen/go/v1";
 
 export const PROVIDER_INFO: Record<AiProvider, ProviderInfo> = {
   anthropic: {
@@ -112,6 +114,27 @@ export const PROVIDER_INFO: Record<AiProvider, ProviderInfo> = {
       { id: "nemotron-3-ultra-free", label: "Nemotron 3 Ultra", tag: "gratis" },
     ],
     hint: "Una sola clave para modelos de Anthropic, OpenAI, Google, DeepSeek, Kimi y más, con 7 modelos gratis. Requiere cuenta en opencode.ai con facturación para los de pago.",
+  },
+  "opencode-go": {
+    id: "opencode-go",
+    label: "OpenCode Go (suscripción)",
+    keysUrl: "https://opencode.ai/auth",
+    needsBaseUrl: false,
+    defaultBaseUrl: OPENCODE_GO_BASE_URL,
+    models: [
+      { id: "gpt-5.6-luna", label: "GPT 5.6 Luna", tag: "recomendado", judge: true, note: "El mejor del plan para conversación en español." },
+      { id: "deepseek-v4-flash", label: "DeepSeek V4 Flash", tag: "recomendado", judge: true, note: "Rápido y con cuota alta (~7,600 peticiones / 5 h)." },
+      { id: "kimi-k2.6", label: "Kimi K2.6", tag: "calidad" },
+      { id: "kimi-k3", label: "Kimi K3", tag: "calidad", note: "Cuota baja (~110 peticiones / 5 h)." },
+      { id: "qwen-3.8-flash", label: "Qwen 3.8 Flash", tag: "economico", judge: true, note: "Cuota muy alta (~5,400 / 5 h)." },
+      { id: "qwen-3.8-max", label: "Qwen 3.8 Max", tag: "calidad" },
+      { id: "glm-5.3-flash", label: "GLM 5.3 Flash", tag: "economico", judge: true },
+      { id: "glm-5.3", label: "GLM 5.3" },
+      { id: "minimax-m3", label: "MiniMax M3", judge: true },
+      { id: "mimo-v2.5", label: "MiMo V2.5", tag: "economico", judge: true, note: "La cuota más alta del plan (~30,000 / 5 h)." },
+      { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro" },
+    ],
+    hint: "Plan de US$10/mes con 18+ modelos abiertos y límites por valor (US$12 cada 5 h, US$30 por semana, US$60 al mes). No incluye Claude ni GPT-5.5: para esos usa OpenCode Zen con saldo.",
   },
   openrouter: {
     id: "openrouter",
