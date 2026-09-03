@@ -1020,3 +1020,6 @@ export const capiSettings = pgTable(
   },
   (t) => [uniqueIndex("capi_settings_org_uq").on(t.organizationId)]
 );
+
+// T1.1/T1.6 — configuración de IA por organización y medición de uso.
+export * from "./schema/ai";
