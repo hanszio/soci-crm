@@ -23,7 +23,7 @@ export const aiSettings = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     provider: text("provider", {
-      enum: ["anthropic", "openai", "google", "openrouter", "compat"],
+      enum: ["anthropic", "openai", "google", "opencode", "openrouter", "compat"],
     }).notNull(),
     apiKeyCipher: text("api_key_cipher").notNull(),
     apiKeyIv: text("api_key_iv").notNull(),
