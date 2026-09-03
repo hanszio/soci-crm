@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AI_PROVIDERS, PROVIDER_INFO, type AiProvider } from "@/lib/ai/providers";
+import {
+  AI_PROVIDERS,
+  defaultModelFor,
+  PROVIDER_INFO,
+  type AiProvider,
+  type ModelInfo,
+  type ModelTag,
+} from "@/lib/ai/providers";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -18,6 +25,87 @@ type Settings = {
 
 type ApiErr = { error?: { message?: string } };
 
+const OTHER = "__other__";
+const SAME_AS_MAIN = "__same__";
+
+const TAG_LABEL: Record<ModelTag, string> = {
+  recomendado: "Recomendado",
+  economico: "Económico",
+  calidad: "Máxima calidad",
+  gratis: "Gratis",
+};
+
+const SELECT_CLASS =
+  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm";
+
+function optionLabel(m: ModelInfo): string {
+  return `${m.label}${m.tag ? ` · ${TAG_LABEL[m.tag]}` : ""}`;
+}
+
+/**
+ * Selector de modelo: lista sugerida del proveedor + "Otro" para escribir un
+ * id a mano. `value` siempre es el id real que se envía a la API.
+ */
+function ModelPicker({
+  id,
+  models,
+  value,
+  onChange,
+  allowSame,
+}: {
+  id: string;
+  models: ModelInfo[];
+  value: string;
+  onChange: (v: string) => void;
+  /** Para el juez: opción "Igual al principal" (valor vacío). */
+  allowSame?: boolean;
+}) {
+  const known = models.some((m) => m.id === value);
+  const [other, setOther] = useState(!known && value !== "");
+  const selectValue = value === "" && allowSame ? SAME_AS_MAIN : other || !known ? OTHER : value;
+  const current = models.find((m) => m.id === value);
+
+  return (
+    <div className="space-y-2">
+      <select
+        id={id}
+        className={SELECT_CLASS}
+        value={selectValue}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === SAME_AS_MAIN) {
+            setOther(false);
+            onChange("");
+          } else if (v === OTHER) {
+            setOther(true);
+            onChange("");
+          } else {
+            setOther(false);
+            onChange(v);
+          }
+        }}
+      >
+        {allowSame && <option value={SAME_AS_MAIN}>Igual al principal</option>}
+        {models.map((m) => (
+          <option key={m.id} value={m.id}>
+            {optionLabel(m)}
+          </option>
+        ))}
+        <option value={OTHER}>Otro (escribir el id del modelo)…</option>
+      </select>
+      {(other || (!known && value !== "")) && (
+        <Input
+          aria-label="Id del modelo"
+          placeholder="id exacto del modelo en el proveedor"
+          value={value}
+          onChange={(e) => onChange(e.target.value.trim())}
+        />
+      )}
+      {current?.note && <p className="text-xs text-text-3">{current.note}</p>}
+    </div>
+  );
+}
+
 export function AiSettingsClient() {
   const [loaded, setLoaded] = useState(false);
   const [forbidden, setForbidden] = useState(false);
@@ -27,7 +115,7 @@ export function AiSettingsClient() {
   const [provider, setProvider] = useState<AiProvider>("anthropic");
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
-  const [model, setModel] = useState("");
+  const [model, setModel] = useState(defaultModelFor("anthropic"));
   const [judgeModel, setJudgeModel] = useState("");
 
   const [testing, setTesting] = useState(false);
@@ -36,6 +124,7 @@ export function AiSettingsClient() {
   const [saveMsg, setSaveMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const info = PROVIDER_INFO[provider];
+  const judgeModels = useMemo(() => info.models.filter((m) => m.judge), [info]);
 
   useEffect(() => {
     fetch("/api/settings/ai")
@@ -55,8 +144,6 @@ export function AiSettingsClient() {
             setBaseUrl(d.settings.baseUrl ?? "");
             setModel(d.settings.model);
             setJudgeModel(d.settings.judgeModel ?? "");
-          } else {
-            setModel(PROVIDER_INFO.anthropic.models[0] ?? "");
           }
         }
         setLoaded(true);
@@ -64,25 +151,27 @@ export function AiSettingsClient() {
       .catch(() => setLoaded(true));
   }, []);
 
-  // Al cambiar de proveedor, sugerir su primer modelo si el campo está vacío o era una sugerencia del anterior.
   function changeProvider(p: AiProvider) {
-    const prev = PROVIDER_INFO[provider];
     setProvider(p);
     setTestResult(null);
-    if (!model || prev.models.includes(model)) setModel(PROVIDER_INFO[p].models[0] ?? "");
-    if (!PROVIDER_INFO[p].needsBaseUrl && p !== "openrouter") setBaseUrl("");
+    setModel(defaultModelFor(p));
+    setJudgeModel("");
+    setBaseUrl("");
   }
 
   const keyChanged = apiKey.trim().length > 0;
   const hasStoredKey = !!current && current.provider === provider;
-  const canTest = model.trim().length > 0 && (keyChanged || hasStoredKey) && (!info.needsBaseUrl || baseUrl.trim().length > 0);
+  const canTest =
+    model.trim().length > 0 &&
+    (keyChanged || hasStoredKey) &&
+    (!info.needsBaseUrl || baseUrl.trim().length > 0);
   const canSave = canTest && testResult?.ok === true;
 
   const payload = useMemo(
     () => ({
       provider,
       apiKey: keyChanged ? apiKey.trim() : undefined,
-      baseUrl: info.needsBaseUrl || provider === "openrouter" ? (baseUrl.trim() || null) : null,
+      baseUrl: info.needsBaseUrl || provider === "openrouter" ? baseUrl.trim() || null : null,
       model: model.trim(),
       judgeModel: judgeModel.trim() || null,
     }),
@@ -102,7 +191,7 @@ export function AiSettingsClient() {
     if (!res) return setTestResult({ ok: false, text: "Sin conexión" });
     const data = (await res.json().catch(() => null)) as ({ ok: true; latencyMs: number; model: string } & ApiErr) | null;
     if (res.ok && data?.ok) {
-      setTestResult({ ok: true, text: `Responde en ${data.latencyMs} ms (${data.model}). Ya puedes guardar.` });
+      setTestResult({ ok: true, text: `Responde en ${data.latencyMs} ms. Ya puedes guardar.` });
     } else {
       setTestResult({ ok: false, text: data?.error?.message ?? "El proveedor rechazó la prueba" });
     }
@@ -142,6 +231,8 @@ export function AiSettingsClient() {
   if (!loaded) return <p className="text-sm text-text-3">Cargando…</p>;
   if (forbidden) return <p className="text-sm text-text-3">Solo el dueño o un administrador puede configurar la IA.</p>;
 
+  const recommended = info.models.filter((m) => m.tag === "recomendado");
+
   return (
     <div className="max-w-2xl space-y-6">
       <Card>
@@ -149,7 +240,7 @@ export function AiSettingsClient() {
           <CardTitle>Proveedor de IA</CardTitle>
           <CardDescription>
             {current
-              ? `Usando tu clave de ${PROVIDER_INFO[current.provider].label} (…${current.apiKeyLast4}) con el modelo ${current.model}.`
+              ? `Usando tu clave de ${PROVIDER_INFO[current.provider].label} (…${current.apiKeyLast4}) con el modelo ${current.model}${current.judgeModel ? ` y juez ${current.judgeModel}` : ""}.`
               : platformConfigured
                 ? "Usando la clave de la plataforma. Pega la tuya para que el agente use tu proveedor y tu saldo."
                 : "La plataforma no tiene IA configurada: pega tu clave para encender el agente y el Laboratorio."}
@@ -158,12 +249,7 @@ export function AiSettingsClient() {
         <CardContent className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="ai-provider">Proveedor</Label>
-            <select
-              id="ai-provider"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={provider}
-              onChange={(e) => changeProvider(e.target.value as AiProvider)}
-            >
+            <select id="ai-provider" className={SELECT_CLASS} value={provider} onChange={(e) => changeProvider(e.target.value as AiProvider)}>
               {AI_PROVIDERS.map((p) => (
                 <option key={p} value={p}>
                   {PROVIDER_INFO[p].label}
@@ -185,7 +271,13 @@ export function AiSettingsClient() {
               id="ai-key"
               type="password"
               autoComplete="off"
-              placeholder={hasStoredKey ? `Guardada (…${current!.apiKeyLast4}). Pega otra solo si quieres cambiarla` : (info.keyPrefix ? `${info.keyPrefix}…` : "clave")}
+              placeholder={
+                hasStoredKey
+                  ? `Guardada (…${current!.apiKeyLast4}). Pega otra solo si quieres cambiarla`
+                  : info.keyPrefix
+                    ? `${info.keyPrefix}…`
+                    : "clave"
+              }
               value={apiKey}
               onChange={(e) => {
                 setApiKey(e.target.value);
@@ -209,34 +301,35 @@ export function AiSettingsClient() {
               />
             </div>
           )}
+          {info.defaultBaseUrl && !info.needsBaseUrl && provider !== "openrouter" && (
+            <p className="text-xs text-text-3">Endpoint: {info.defaultBaseUrl}</p>
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="ai-model">Modelo principal</Label>
-              <Input
+              <ModelPicker
                 id="ai-model"
-                list="ai-model-suggestions"
+                models={info.models}
                 value={model}
-                onChange={(e) => {
-                  setModel(e.target.value);
+                onChange={(v) => {
+                  setModel(v);
                   setTestResult(null);
                 }}
               />
-              <datalist id="ai-model-suggestions">
-                {info.models.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
-              <p className="text-xs text-text-3">Responde a tus clientes. Sugeridos: {info.models.join(", ")}.</p>
+              <p className="text-xs text-text-3">
+                Responde a tus clientes.
+                {recommended.length > 0 && ` Recomendado: ${recommended.map((m) => m.label).join(" o ")}.`}
+              </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ai-judge">Modelo juez (opcional)</Label>
-              <Input
+              <Label htmlFor="ai-judge">Modelo juez</Label>
+              <ModelPicker
                 id="ai-judge"
-                list="ai-model-suggestions"
-                placeholder="Igual al principal si lo dejas vacío"
+                models={judgeModels.length > 0 ? judgeModels : info.models}
                 value={judgeModel}
-                onChange={(e) => setJudgeModel(e.target.value)}
+                onChange={setJudgeModel}
+                allowSame
               />
               <p className="text-xs text-text-3">Evalúa el Laboratorio; uno barato basta.</p>
             </div>
@@ -267,9 +360,7 @@ export function AiSettingsClient() {
               {saveMsg.text}
             </p>
           )}
-          {!testResult?.ok && (
-            <p className="text-xs text-text-3">Guardar se habilita cuando la prueba de conexión pasa.</p>
-          )}
+          {!testResult?.ok && <p className="text-xs text-text-3">Guardar se habilita cuando la prueba de conexión pasa.</p>}
         </CardContent>
       </Card>
     </div>

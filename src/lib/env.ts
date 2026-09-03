@@ -40,6 +40,8 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
+  // OpenCode Zen (https://opencode.ai/auth): una clave para modelos de varios labs.
+  OPENCODE_API_KEY: z.string().optional(),
   // API compatible con OpenAI (Groq, DeepSeek, Ollama, OpenCode Zen…):
   // URL base SIN /chat/completions, p. ej. https://api.groq.com/openai/v1
   AI_COMPAT_BASE_URL: z.string().url().optional(),
@@ -139,6 +141,7 @@ export function isAiConfigured(): boolean {
   return (
     has("OPENROUTER_API_TOKEN") ||
     has("OPENROUTER_API_KEY") ||
+    has("OPENCODE_API_KEY") ||
     has("ANTHROPIC_API_KEY") ||
     has("OPENAI_API_KEY") ||
     has("GOOGLE_GENERATIVE_AI_API_KEY") ||
