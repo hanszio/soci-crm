@@ -6,6 +6,7 @@ import type { EmbeddingModel, LanguageModel } from "ai";
 import { getOrgAiOverride } from "@/lib/ai/org-override";
 import {
   OPENCODE_BASE_URL,
+  OPENCODE_GO_BASE_URL,
   OPENROUTER_BASE_URL,
   PROVIDER_INFO,
   parseModelId,
@@ -36,6 +37,7 @@ function aiEnv() {
     GOOGLE_GENERATIVE_AI_API_KEY: g("GOOGLE_GENERATIVE_AI_API_KEY"),
     OPENROUTER_API_KEY: g("OPENROUTER_API_KEY"),
     OPENCODE_API_KEY: g("OPENCODE_API_KEY") ?? g("OPENCODE_ZEN_API_KEY"),
+    OPENCODE_GO_API_KEY: g("OPENCODE_GO_API_KEY") ?? g("OPENCODE_API_KEY"),
     AI_COMPAT_BASE_URL: g("AI_COMPAT_BASE_URL"),
     AI_COMPAT_API_KEY: g("AI_COMPAT_API_KEY"),
   };
@@ -70,6 +72,8 @@ function platformKey(provider: AiProvider): string | undefined {
       return env.OPENROUTER_API_KEY ?? env.OPENROUTER_API_TOKEN;
     case "opencode":
       return env.OPENCODE_API_KEY;
+    case "opencode-go":
+      return env.OPENCODE_GO_API_KEY;
     case "compat":
       return env.AI_COMPAT_API_KEY ?? "no-key";
   }
@@ -229,6 +233,12 @@ export function buildLanguageModel(spec: ModelSpec): LanguageModel {
         baseURL: spec.baseUrl ?? OPENCODE_BASE_URL,
         apiKey: spec.apiKey,
       })(spec.model);
+    case "opencode-go":
+      return createOpenAICompatible({
+        name: "opencode-go",
+        baseURL: spec.baseUrl ?? OPENCODE_GO_BASE_URL,
+        apiKey: spec.apiKey,
+      })(spec.model);
     case "compat":
       if (!spec.baseUrl) throw new Error("proveedor compat sin URL base");
       return createOpenAICompatible({
@@ -254,6 +264,8 @@ export function buildEmbeddingModel(spec: ModelSpec): EmbeddingModel {
       }).embeddingModel(spec.model);
     case "opencode":
       return createOpenAICompatible({ name: "opencode", baseURL: spec.baseUrl ?? OPENCODE_BASE_URL, apiKey: spec.apiKey }).embeddingModel(spec.model);
+    case "opencode-go":
+      return createOpenAICompatible({ name: "opencode-go", baseURL: spec.baseUrl ?? OPENCODE_GO_BASE_URL, apiKey: spec.apiKey }).embeddingModel(spec.model);
     case "compat":
       if (!spec.baseUrl) throw new Error("proveedor compat sin URL base");
       return createOpenAICompatible({ name: "compat", baseURL: spec.baseUrl, apiKey: spec.apiKey }).embeddingModel(spec.model);
