@@ -95,3 +95,13 @@ describe("resolveCandidates (orden y compatibilidad)", () => {
 // evita warning de import sin uso en algunos linters
 void resolveCandidates;
 void specKey;
+
+describe("stripThinking", () => {
+  it("quita bloques <think> cerrados y abiertos", async () => {
+    const { stripThinking } = await import("@/lib/ai");
+    expect(stripThinking("<think>razono</think>ok")).toBe("ok");
+    expect(stripThinking('<think>a</think>{"action":"none"}')).toBe('{"action":"none"}');
+    expect(stripThinking("<think>sin cerrar…")).toBe("");
+    expect(stripThinking("normal")).toBe("normal");
+  });
+});

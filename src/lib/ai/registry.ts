@@ -227,18 +227,9 @@ export function buildLanguageModel(spec: ModelSpec): LanguageModel {
         headers: APP_HEADERS,
       })(spec.model);
     case "opencode":
-      // OpenCode Zen expone todos sus modelos por /chat/completions.
-      return createOpenAICompatible({
-        name: "opencode",
-        baseURL: spec.baseUrl ?? OPENCODE_BASE_URL,
-        apiKey: spec.apiKey,
-      })(spec.model);
+      return buildOpenCodeModel(spec, spec.baseUrl ?? OPENCODE_BASE_URL, "opencode");
     case "opencode-go":
-      return createOpenAICompatible({
-        name: "opencode-go",
-        baseURL: spec.baseUrl ?? OPENCODE_GO_BASE_URL,
-        apiKey: spec.apiKey,
-      })(spec.model);
+      return buildOpenCodeModel(spec, spec.baseUrl ?? OPENCODE_GO_BASE_URL, "opencode-go");
     case "compat":
       if (!spec.baseUrl) throw new Error("proveedor compat sin URL base");
       return createOpenAICompatible({
@@ -247,6 +238,24 @@ export function buildLanguageModel(spec: ModelSpec): LanguageModel {
         apiKey: spec.apiKey,
       })(spec.model);
   }
+}
+
+/**
+ * OpenCode (Zen y Go) sirve cada familia por un endpoint distinto: los GPT,
+ * Grok y Muse solo responden por /responses (API Responses de OpenAI), los
+ * Claude por /messages (API de Anthropic) y el resto por /chat/completions.
+ * Verificado el 2026-09-03 contra el plan Go: gpt-5.6-luna da 500 en
+ * chat/completions y responde en /responses.
+ */
+function buildOpenCodeModel(spec: ModelSpec, baseURL: string, name: string): LanguageModel {
+  const m = spec.model.toLowerCase();
+  if (/^(gpt-|grok-|muse-spark)/.test(m)) {
+    return createOpenAI({ apiKey: spec.apiKey, baseURL }).responses(spec.model);
+  }
+  if (/^claude-/.test(m)) {
+    return createAnthropic({ apiKey: spec.apiKey, baseURL })(spec.model);
+  }
+  return createOpenAICompatible({ name, baseURL, apiKey: spec.apiKey })(spec.model);
 }
 
 export function buildEmbeddingModel(spec: ModelSpec): EmbeddingModel {
