@@ -326,4 +326,23 @@ describe("google", () => {
         /modo prueba/.test(err.message)
     );
   });
+
+  it("reconectar con OTRO refresh token bajo el mismo clientId+calendarId no reutiliza el access token viejo", async () => {
+    // Bug real: la clave de caché solo incluía clientId+calendarId. Reconectar
+    // (p. ej. tras ampliar el scope) con un refresh token nuevo pero el mismo
+    // calendario seguía devolviendo el token viejo hasta que expiraba (~1 h),
+    // y el agendado fallaba en silencio con "insufficient scope".
+    const credsA = { ...creds, refreshToken: "ref_A" };
+    const credsB = { ...creds, refreshToken: "ref_B" };
+
+    await googleConnector.createMeeting(credsA, REQ);
+    const tokenCallsAfterFirst = calls.filter((c) => c.url.endsWith("/token")).length;
+    expect(tokenCallsAfterFirst).toBe(1);
+
+    await googleConnector.createMeeting(credsB, REQ);
+    const tokenCallsAfterSecond = calls.filter((c) => c.url.endsWith("/token")).length;
+    // Si el caché estuviera envenenado por clientId+calendarId, este segundo
+    // agendado NO pediría un token nuevo y seguiría usando el de credsA.
+    expect(tokenCallsAfterSecond).toBe(2);
+  });
 });
