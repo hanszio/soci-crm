@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { getEnv } from "@/lib/env";
 import {
   ConnectorError,
@@ -35,12 +36,23 @@ import {
 
 export const GOOGLE_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 
+function shortHash(value: string): string {
+  return createHash("sha256").update(value).digest("hex").slice(0, 12);
+}
+
 /** Cuántas veces se re-lee el evento esperando el enlace de Meet. */
 const CONFERENCE_POLLS = 3;
 const POLL_DELAY_MS = 400;
 
 async function getAccessToken(creds: GoogleCreds): Promise<string> {
-  const key = `${creds.clientId}:${creds.calendarId}`;
+  // Bug real (2026-09-03): cachear solo por clientId+calendarId hace que,
+  // al reconectar con OTRO refresh token (p. ej. tras ampliar el scope o
+  // reautorizar), el turno siga usando el access token viejo hasta que
+  // expire (~1 h) — la prueba de conexión y el agendado fallan en silencio
+  // con "insufficient scope" aunque las credenciales nuevas sean correctas.
+  // La clave incluye ahora un hash corto del refresh token para que cambiar
+  // credenciales invalide el caché de inmediato.
+  const key = `${creds.clientId}:${creds.calendarId}:${shortHash(creds.refreshToken)}`;
   const cached = getCachedGoogleToken(key);
   if (cached) return cached;
 
