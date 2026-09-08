@@ -1053,9 +1053,18 @@ async function agendaChecks() {
       maxDaysAhead: 7,
       connector: "enlace-fijo",
       meetingLink: SALA,
+      // Estos checks son de videollamada (enlace por cita). Las modalidades
+      // sin enlace (presencial, llamada) tienen su bloque más abajo.
+      modalities: ["videollamada"],
     }),
   });
   ok("se guarda el horario y la sala fija", guardado.res.ok, `status=${guardado.res.status}`);
+  ok(
+    "la modalidad guardada es la que se pidió",
+    Array.isArray(guardado.json?.settings?.modalities) &&
+      guardado.json.settings.modalities.join() === "videollamada",
+    JSON.stringify(guardado.json?.settings?.modalities)
+  );
 
   const tzMala = await api("/api/calendar/settings", {
     method: "PUT",
@@ -1167,6 +1176,68 @@ async function agendaChecks() {
     lista.some((b) => b.id === creada.json?.bookingId && b.source === "ai"),
     JSON.stringify(lista.map((b) => ({ id: b.id, source: b.source })))
   );
+
+  // T1.4 — Modalidad sin enlace: presencial lleva la dirección del negocio y
+  // NO deja el enlace "pendiente" (no hay enlace que esperar).
+  console.log("\n== T1.4: cita presencial (sin enlace, con dirección) ==");
+  const DIRECCION = "Av. El Sol 123, Cusco";
+  await api("/api/calendar/settings", {
+    method: "PUT",
+    body: JSON.stringify({
+      modalities: ["presencial", "llamada"],
+      address: DIRECCION,
+    }),
+  });
+  const ofertaPres = await bot(
+    `/api/bot/availability?conversationId=${convA.id}&limit=12&perDay=3&days=5`
+  );
+  const slotPres = (ofertaPres.json?.slots ?? [])[0];
+  const presencial = await bot("/api/bot/bookings", {
+    method: "POST",
+    body: JSON.stringify({
+      conversationId: convA.id,
+      startUtc: slotPres.startUtc,
+      modality: "presencial",
+    }),
+  });
+  ok(
+    "una cita presencial se crea (201) con la dirección y sin enlace pendiente",
+    presencial.res.status === 201 &&
+      presencial.json?.modality === "presencial" &&
+      presencial.json?.address === DIRECCION &&
+      presencial.json?.linkPending === false &&
+      presencial.json?.meetingLink === null,
+    JSON.stringify(presencial.json)
+  );
+  const listaPres = (await api("/api/bookings")).json?.bookings ?? [];
+  ok(
+    "la cita presencial se ve con su modalidad en Citas",
+    listaPres.some(
+      (b) => b.id === presencial.json?.bookingId && b.modality === "presencial"
+    )
+  );
+  // Reservar limpia la oferta de la conversación: se vuelve a ofrecer antes.
+  const ofertaPres2 = await bot(
+    `/api/bot/availability?conversationId=${convA.id}&limit=12&perDay=3&days=5`
+  );
+  const noPermitida = await bot("/api/bot/bookings", {
+    method: "POST",
+    body: JSON.stringify({
+      conversationId: convA.id,
+      startUtc: (ofertaPres2.json?.slots ?? [])[0]?.startUtc,
+      modality: "videollamada",
+    }),
+  });
+  ok(
+    "una modalidad que el negocio no ofrece cae a la primera permitida",
+    noPermitida.res.status === 201 && noPermitida.json?.modality === "presencial",
+    JSON.stringify(noPermitida.json)
+  );
+  // De vuelta a videollamada para el resto de los checks de enlace.
+  await api("/api/calendar/settings", {
+    method: "PUT",
+    body: JSON.stringify({ modalities: ["videollamada"], address: null }),
+  });
 
   // GARANTÍA 2: la carrera. B tenía el mismo hueco ofrecido y llega tarde.
   const ofertaB = await bot(
@@ -1379,7 +1450,8 @@ async function agendaChecks() {
       ok(
         "el proveedor recibió la reunión con su tema y su hora",
         estado.meetings?.length === 1 &&
-          estado.meetings[0].topic.startsWith("Cita —"),
+          // T1.4: el tema dice cómo se atiende ("Videollamada — <cliente>").
+          estado.meetings[0].topic.startsWith("Videollamada —"),
         JSON.stringify(estado.meetings)
       );
 

@@ -75,12 +75,16 @@ export async function cancelQueued(
  */
 export async function claim(limit: number, now = new Date()): Promise<ClaimedJob[]> {
   const db = getDb();
+  // El driver no serializa Date en SQL crudo: va como ISO y se castea. Las
+  // columnas son `timestamp` sin zona y Drizzle escribe en UTC, así que el
+  // ISO con Z compara bien.
+  const nowIso = now.toISOString();
   const rows = await db.execute(sql`
     UPDATE agent_job
-    SET status = 'running', locked_at = ${now}, updated_at = ${now}
+    SET status = 'running', locked_at = ${nowIso}::timestamp, updated_at = ${nowIso}::timestamp
     WHERE id IN (
       SELECT id FROM agent_job
-      WHERE status = 'queued' AND run_at <= ${now}
+      WHERE status = 'queued' AND run_at <= ${nowIso}::timestamp
       ORDER BY run_at
       LIMIT ${limit}
       FOR UPDATE SKIP LOCKED
