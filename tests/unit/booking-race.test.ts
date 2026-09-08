@@ -20,6 +20,8 @@ const settings = {
   minNoticeHours: 0,
   maxDaysAhead: 7,
   timezone: "America/Mexico_City",
+  modalities: ["videollamada" as const],
+  address: null,
   connector: "enlace-fijo" as const,
   meetingLink: "https://meet.ejemplo.com/sala",
 };

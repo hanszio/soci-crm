@@ -344,6 +344,7 @@ export const conversation = pgTable(
     handoffReason: text("handoff_reason", {
       // 008: manual_reply = el dueño respondió desde la app del teléfono.
       // hostilidad = el lead se puso agresivo y el agente se retiró.
+      // cita_agendada = el agente cerró una cita y le pasa el hilo al equipo.
       enum: [
         "cliente",
         "modelo",
@@ -351,6 +352,7 @@ export const conversation = pgTable(
         "ventana",
         "hostilidad",
         "manual_reply",
+        "cita_agendada",
       ],
     }),
     lastInboundAt: timestamp("last_inbound_at"),
@@ -588,6 +590,16 @@ export const agentProfile = pgTable(
     instructions: text("instructions"),
     escalationRules: text("escalation_rules"),
     greeting: text("greeting"),
+    /**
+     * `cita`: pedir un humano se convierte en agendar una llamada; la IA solo
+     * se calla tras la cita. `humano`: pedir un humano pausa la IA (clásico).
+     */
+    escalationMode: text("escalation_mode", { enum: ["cita", "humano"] })
+      .notNull()
+      .default("cita"),
+    /** Retraso "humano" antes de contestar, en segundos (T1.2). */
+    delayMinSec: integer("delay_min_sec").notNull().default(10),
+    delayMaxSec: integer("delay_max_sec").notNull().default(300),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -687,7 +699,14 @@ export const calendarSettings = pgTable(
     bufferMinutes: integer("buffer_minutes").notNull().default(0),
     minNoticeHours: integer("min_notice_hours").notNull().default(2),
     maxDaysAhead: integer("max_days_ahead").notNull().default(7),
-    timezone: text("timezone").notNull().default("America/Mexico_City"),
+    timezone: text("timezone").notNull().default("America/Lima"),
+    /**
+     * Modalidades que el negocio ofrece: `["presencial","llamada"]` por
+     * defecto — ninguna depende de un enlace. `videollamada` se enciende aparte.
+     */
+    modalities: jsonb("modalities").notNull().default(["presencial", "llamada"]),
+    /** Dirección del local; va en la confirmación de las citas presenciales. */
+    address: text("address"),
     /**
      * Cómo se entrega la reunión. `enlace-fijo` no habla con nadie: es el
      * default y la razón de que encender la agenda no exija terceros.
@@ -731,6 +750,13 @@ export const booking = pgTable(
       onDelete: "set null",
     }),
     leadId: text("lead_id").references(() => lead.id, { onDelete: "set null" }),
+    /**
+     * Cómo se atiende: presencial | llamada | videollamada. Null en citas
+     * anteriores a la columna (se leen como videollamada, que era lo único).
+     */
+    modality: text("modality", {
+      enum: ["presencial", "llamada", "videollamada"],
+    }),
     /** Instante UTC. El horario semanal es de pared; esto ya está resuelto. */
     scheduledAt: timestamp("scheduled_at").notNull(),
     /** Capturada al crear: cambiar la configuración no reescribe el pasado. */
@@ -1023,3 +1049,39 @@ export const capiSettings = pgTable(
 
 // T1.1/T1.6 — configuración de IA por organización y medición de uso.
 export * from "./schema/ai";
+
+/**
+ * T1.2 — La cola persistente. Un turno programado sobrevive a un redeploy.
+ * `conversation_id` va desnormalizado del payload para el índice único
+ * parcial: una conversación tiene como mucho UN trabajo de cada tipo en cola.
+ */
+export const agentJob = pgTable(
+  "agent_job",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["agent_turn", "agent_typing"] }).notNull(),
+    conversationId: text("conversation_id").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    runAt: timestamp("run_at").notNull(),
+    status: text("status", {
+      enum: ["queued", "running", "done", "failed", "cancelled"],
+    })
+      .notNull()
+      .default("queued"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
+    lastError: text("last_error"),
+    lockedAt: timestamp("locked_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("agent_job_due_idx").on(t.status, t.runAt),
+    uniqueIndex("agent_job_queued_uq")
+      .on(t.kind, t.conversationId)
+      .where(sql`${t.status} = 'queued'`),
+  ]
+);

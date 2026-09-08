@@ -22,6 +22,9 @@ export type BookingPayload = {
   meetingLink: string | null;
   linkPending: boolean;
   label: string;
+  modality: "presencial" | "llamada" | "videollamada";
+  /** Dirección del negocio en las presenciales; null en las demás. */
+  address: string | null;
 };
 
 export function bookingPayload(result: BookingResult): BookingPayload {
@@ -35,6 +38,8 @@ export function bookingPayload(result: BookingResult): BookingPayload {
      */
     linkPending: result.linkPending,
     label: result.label,
+    modality: result.modality,
+    address: result.address,
   };
 }
 

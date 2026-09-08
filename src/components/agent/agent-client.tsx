@@ -16,6 +16,9 @@ type Profile = {
   instructions: string | null;
   escalationRules: string | null;
   greeting: string | null;
+  escalationMode: "cita" | "humano";
+  delayMinSec: number;
+  delayMaxSec: number;
 };
 
 type KbEntry = {
@@ -164,6 +167,52 @@ function ProfileSection({
             value={form.instructions ?? ""}
             onChange={(e) => setForm({ ...form, instructions: e.target.value })}
           />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="agent-delay-min">Tarda en responder (mín. seg)</Label>
+            <Input
+              id="agent-delay-min"
+              type="number"
+              min={0}
+              max={900}
+              value={form.delayMinSec}
+              onChange={(e) => setForm({ ...form, delayMinSec: Number(e.target.value) })}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="agent-delay-max">Tarda en responder (máx. seg)</Label>
+            <Input
+              id="agent-delay-max"
+              type="number"
+              min={0}
+              max={1800}
+              value={form.delayMaxSec}
+              onChange={(e) => setForm({ ...form, delayMaxSec: Number(e.target.value) })}
+            />
+          </div>
+          <p className="col-span-2 text-xs text-muted-foreground">
+            Un &quot;ok&quot; se contesta rápido; una pregunta de agenda tarda
+            más, como una persona mirando el calendario. Antes de responder
+            aparece &quot;escribiendo…&quot;.
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="agent-escalation-mode">Cuando piden un humano</Label>
+          <select
+            id="agent-escalation-mode"
+            className="h-9 w-full rounded-sm border border-border bg-background px-2 text-sm"
+            value={form.escalationMode}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                escalationMode: e.target.value as Profile["escalationMode"],
+              })
+            }
+          >
+            <option value="cita">Agendar una llamada con un asesor (el agente sigue hasta cerrar la cita)</option>
+            <option value="humano">Pausar la IA de inmediato y avisar en la bandeja</option>
+          </select>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="agent-escalation">Reglas de escalado</Label>

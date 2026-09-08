@@ -25,6 +25,8 @@ const settings = {
   minNoticeHours: 0,
   maxDaysAhead: 7,
   timezone: "America/Mexico_City",
+  modalities: ["videollamada" as const],
+  address: null,
   connector: "zoom" as const,
   meetingLink: null,
 };

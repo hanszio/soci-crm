@@ -18,6 +18,7 @@ export type BookingListItem = {
   weekday: string;
   contact: { id: string; name: string } | null;
   conversationId: string | null;
+  modality: "presencial" | "llamada" | "videollamada";
   /** Con qué conector nació la entrega de esta cita. */
   connector: string | null;
   meetingLink: string | null;
@@ -62,6 +63,7 @@ export async function listBookings(
         ? { id: r.contactId, name: r.contactName ?? "" }
         : null,
       conversationId: r.booking.conversationId,
+      modality: r.booking.modality ?? "videollamada",
       connector: r.booking.connector,
       meetingLink: r.booking.meetingLink,
       linkPending: r.booking.linkPending,

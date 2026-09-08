@@ -3,8 +3,8 @@ import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
 import { moveLeadToStage as moveLeadThroughHistory } from "@/server/leads/stage-history";
-import { getEnv } from "@/lib/env";
 import { chatJson, type ChatMessage } from "@/lib/ai";
+import { enqueue } from "@/server/jobs/queue";
 import { publish } from "@/server/events/bus";
 import { isWindowOpen } from "@/server/inbox/window";
 import { SendError, sendText } from "@/server/inbox/send";
@@ -18,72 +18,51 @@ import { matchesHandoffIntent } from "@/server/ai/handoff";
 import { buildAgentSystemPrompt } from "@/server/ai/prompts";
 import { agendaEnabled } from "@/server/agenda/flag";
 import { bookSlot, offerSlots } from "@/server/agenda/agent";
+import { getOffers } from "@/server/agenda/offers";
+import { getSettings } from "@/server/agenda/settings";
+import { hasActiveBooking } from "@/server/agenda/service";
+import {
+  AFTER_BOOKING_FAREWELL,
+  CALL_OFFER_INTRO,
+  decideEscalation,
+  nextProviderRetry,
+  PROVIDER_DOWN_REPLY,
+} from "@/server/ai/policy";
 
 /**
  * Turno del agente (FR-021..FR-025).
  *
- * Coalesce + lock in-process por conversación: ráfagas de mensajes → UNA
- * respuesta; nunca dos turnos simultáneos; lo que llega durante un turno
- * re-encola exactamente un turno más. Suficiente para el monolito de una
- * instancia (sin colas externas — Constitución II).
+ * La programación vive en la cola persistente (T1.2, `server/jobs`): una
+ * ráfaga de mensajes pospone el único turno pendiente de la conversación, y
+ * un redeploy en mitad del retraso humano no pierde la respuesta. Aquí solo
+ * queda el candado in-process contra dos turnos simultáneos.
  */
 
-type CoalesceEntry = {
-  timer: ReturnType<typeof setTimeout> | null;
-  running: boolean;
-  pending: boolean;
-};
+type RunningMap = Map<string, true>;
 
-const globalForAgent = globalThis as unknown as {
-  __agentCoalesce?: Map<string, CoalesceEntry>;
-};
+const globalForAgent = globalThis as unknown as { __agentRunning?: RunningMap };
 
-function coalesceMap(): Map<string, CoalesceEntry> {
-  if (!globalForAgent.__agentCoalesce) {
-    globalForAgent.__agentCoalesce = new Map();
-  }
-  return globalForAgent.__agentCoalesce;
+function runningMap(): RunningMap {
+  if (!globalForAgent.__agentRunning) globalForAgent.__agentRunning = new Map();
+  return globalForAgent.__agentRunning;
 }
 
-/** Punto de entrada con debounce (mensajes entrantes reales). */
-export function scheduleAgentTurn(conversationId: string): void {
-  const map = coalesceMap();
-  const entry = map.get(conversationId) ?? {
-    timer: null,
-    running: false,
-    pending: false,
-  };
-  map.set(conversationId, entry);
-
-  if (entry.running) {
-    entry.pending = true; // se re-encola al terminar el turno actual
-    return;
-  }
-  if (entry.timer) clearTimeout(entry.timer);
-  const delay = getEnv().AGENT_COALESCE_MS;
-  entry.timer = setTimeout(() => {
-    entry.timer = null;
-    void executeTurn(conversationId);
-  }, delay);
-}
-
-async function executeTurn(conversationId: string): Promise<void> {
-  const map = coalesceMap();
-  const entry = map.get(conversationId);
-  if (!entry || entry.running) return;
-  entry.running = true;
+/**
+ * Corre UN turno si esa conversación no tiene otro en curso. La cola (T1.2)
+ * garantiza un solo trabajo pendiente por conversación; esto cubre el hueco
+ * entre dos trabajos que vencieron seguidos.
+ */
+export async function runAgentTurnExclusive(
+  conversationId: string
+): Promise<"ran" | "busy"> {
+  const map = runningMap();
+  if (map.has(conversationId)) return "busy";
+  map.set(conversationId, true);
   try {
     await runAgentTurn(conversationId);
-  } catch (err) {
-    console.error("[agente] turno falló:", err);
+    return "ran";
   } finally {
-    entry.running = false;
-    if (entry.pending) {
-      entry.pending = false;
-      void executeTurn(conversationId);
-    } else {
-      map.delete(conversationId);
-    }
+    map.delete(conversationId);
   }
 }
 
@@ -135,9 +114,34 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     return;
   }
 
-  // Patrón de respaldo ANTES del LLM (FR-022). Avisa al cliente antes de
-  // callarse: un handoff mudo se ve como "no me respondieron".
+  const agenda = agendaEnabled();
+
+  // Patrón de respaldo ANTES del LLM (FR-022). Con la política `cita`, pedir
+  // un humano se convierte en ofrecer una llamada agendada: el dueño no vive
+  // en el dashboard, y un handoff mudo se ve como "no me respondieron".
   if (lastInbound.text && matchesHandoffIntent(lastInbound.text)) {
+    const decision = decideEscalation({
+      mode: profile.escalationMode,
+      agenda,
+      hasActiveBooking: await hasActiveBooking(
+        organizationId,
+        conversation.contactId
+      ).catch(() => false),
+      reason: null,
+    });
+    if (decision.kind === "offer_call") {
+      try {
+        const turn = await offerSlots({
+          organizationId,
+          conversationId,
+          intro: CALL_OFFER_INTRO,
+        });
+        await deliverReply(conversation, turn.text);
+        return;
+      } catch (err) {
+        console.error(`[agente] no pude ofrecer la llamada, escalo: ${err}`);
+      }
+    }
     try {
       await deliverReply(conversation, HANDOFF_FAREWELL);
     } catch (err) {
@@ -158,11 +162,39 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     .where(eq(schema.pipelineStage.organizationId, organizationId))
     .orderBy(asc(schema.pipelineStage.position));
 
-  const agenda = agendaEnabled();
+  // La oferta vigente y la hora actual van al prompt: sin el startUtc exacto el
+  // modelo no puede reservar, y sin la fecha no sabe qué día es "mañana".
+  let offers: { startUtc: string; label: string }[] = [];
+  let now: string | undefined;
+  let modalities: ("presencial" | "llamada" | "videollamada")[] | undefined;
+  let address: string | null = null;
+  if (agenda) {
+    try {
+      const [settings, current] = await Promise.all([
+        getSettings(organizationId),
+        getOffers(organizationId, conversationId),
+      ]);
+      offers = current;
+      now = formatNow(new Date(), settings.timezone);
+      modalities = settings.modalities;
+      address = settings.address;
+    } catch (err) {
+      console.warn(`[agente] no pude leer la oferta vigente: ${err}`);
+    }
+  }
   const messages: ChatMessage[] = [
     {
       role: "system",
-      content: buildAgentSystemPrompt({ profile, kb, stages, agenda }),
+      content: buildAgentSystemPrompt({
+        profile,
+        kb,
+        stages,
+        agenda,
+        offers,
+        now,
+        modalities,
+        address,
+      }),
     },
     ...history
       .filter((m) => m.text)
@@ -178,13 +210,54 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   });
   if (!result.ok) {
     if (result.error === "not_configured") return;
-    // Fallo persistente del proveedor o salida imposible → escalar (FR-022).
     console.error(`[agente] fallo del proveedor (raw): ${result.detail}`);
+    // Un hipo del proveedor no puede dejar al cliente sin respuesta ni pausar
+    // la IA para siempre: se reintenta el turno con espera creciente y solo
+    // al agotar los intentos se avisa al cliente y se escala.
+    const attempt = bumpRetry(conversationId);
+    const delay = nextProviderRetry(attempt);
+    if (delay !== null) {
+      console.warn(
+        `[agente] reintento ${attempt + 1} del turno en ${Math.round(delay / 1000)}s`
+      );
+      await enqueue({
+        organizationId,
+        kind: "agent_turn",
+        conversationId,
+        runAt: new Date(Date.now() + delay),
+      });
+      return;
+    }
+    clearRetry(conversationId);
+    try {
+      await deliverReply(conversation, PROVIDER_DOWN_REPLY);
+    } catch (err) {
+      console.error("[agente] no pude avisar la caída del proveedor:", err);
+    }
     await applyHandoff(conversationId, organizationId, "error");
     return;
   }
+  clearRetry(conversationId);
 
   let action: AgentActionType = result.data;
+
+  // Política de cierre: el modelo quiere escalar, pero con `cita` eso se
+  // convierte en ofrecer una llamada, salvo que ya haya cita o el motivo sea
+  // de los que sí ameritan parar (cancelar, hostilidad).
+  if (action.action === "handoff") {
+    const decision = decideEscalation({
+      mode: profile.escalationMode,
+      agenda,
+      hasActiveBooking: await hasActiveBooking(
+        organizationId,
+        conversation.contactId
+      ).catch(() => false),
+      reason: action.reason ?? null,
+    });
+    if (decision.kind === "offer_call") {
+      action = { action: "offer_slots", reply: CALL_OFFER_INTRO };
+    }
+  }
 
   // 015 — Agenda. Un fallo del motor degrada el turno (el agente responde sin
   // agendar), nunca lo tumba: quedarse callado es peor que no agendar.
@@ -205,9 +278,18 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
                 conversationId,
                 startUtc: action.startUtc,
                 confirmation: action.reply,
+                modality: action.modality,
               });
-        await deliverReply(conversation, turn.text);
-        if (turn.ok) {
+        const booked = action.action === "book_slot" && turn.ok;
+        await deliverReply(
+          conversation,
+          booked ? `${turn.text}\n${AFTER_BOOKING_FAREWELL}` : turn.text
+        );
+        if (booked) {
+          // La cita es el cierre: de aquí en adelante habla el equipo. El lead
+          // ya avanzó de etapa dentro del motor de agenda.
+          await applyHandoff(conversationId, organizationId, "cita_agendada");
+        } else if (turn.ok) {
           publish(organizationId, {
             type: "conversation.updated",
             data: { conversation: { id: conversationId } },
@@ -257,6 +339,21 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
       return;
     }
   }
+}
+
+/** "viernes 4 de septiembre de 2026, 09:12 (America/Lima)". */
+export function formatNow(date: Date, timezone: string): string {
+  const text = new Intl.DateTimeFormat("es", {
+    timeZone: timezone,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+  return `${text} (${timezone})`;
 }
 
 /** Texto fijo al escalar por la regex de respaldo (sin pasar por el modelo). */
@@ -312,10 +409,23 @@ async function persistTestOutbound(
     .where(eq(schema.conversation.id, conversation.id));
 }
 
+/** Reintentos del turno por caída del proveedor, por conversación. */
+const providerRetries = new Map<string, number>();
+
+function bumpRetry(conversationId: string): number {
+  const attempt = providerRetries.get(conversationId) ?? 0;
+  providerRetries.set(conversationId, attempt + 1);
+  return attempt;
+}
+
+function clearRetry(conversationId: string): void {
+  providerRetries.delete(conversationId);
+}
+
 export async function applyHandoff(
   conversationId: string,
   organizationId: string,
-  reason: "cliente" | "modelo" | "error" | "ventana"
+  reason: "cliente" | "modelo" | "error" | "ventana" | "cita_agendada"
 ): Promise<void> {
   const db = getDb();
   const updated = await db

@@ -32,6 +32,8 @@ const prefixes = {
   // T1.1/T1.6 — IA por organización y uso
   aiSettings: "ais",
   usageEvent: "use",
+  // T1.2 — cola persistente
+  agentJob: "ajb",
 } as const;
 
 export type IdKind = keyof typeof prefixes;

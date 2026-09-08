@@ -44,6 +44,9 @@ const agendaActions = [
     action: z.literal("book_slot"),
     startUtc: z.string().min(1),
     reply: z.string().optional(),
+    // Lo que eligió el cliente. El motor la valida contra lo permitido: una
+    // modalidad que el negocio no ofrece cae a la que sí.
+    modality: z.enum(["presencial", "llamada", "videollamada"]).optional(),
   }),
 ] as const;
 

@@ -17,6 +17,11 @@ import {
   CONNECTOR_ORDER,
   type ConnectorId,
 } from "@/lib/agenda-connectors";
+import {
+  MODALITY_META,
+  MODALITY_ORDER,
+  type Modality,
+} from "@/lib/agenda-modalities";
 import { ConnectorCredentials } from "@/components/settings/connector-credentials";
 
 /**
@@ -35,6 +40,8 @@ type Settings = {
   minNoticeHours: number;
   maxDaysAhead: number;
   timezone: string;
+  modalities: Modality[];
+  address: string | null;
   connector: ConnectorId;
   meetingLink: string | null;
 };
@@ -89,6 +96,17 @@ export function AgendaClient() {
     setSaved(false);
   }
 
+  function toggleModality(m: Modality) {
+    if (!settings) return;
+    const has = settings.modalities.includes(m);
+    const next = has
+      ? settings.modalities.filter((x) => x !== m)
+      : [...settings.modalities, m];
+    // Siempre queda al menos una: sin modalidad no hay nada que ofrecer.
+    if (next.length === 0) return;
+    patch({ modalities: MODALITY_ORDER.filter((x) => next.includes(x)) });
+  }
+
   function toggleDay(day: DayKey) {
     if (!settings) return;
     const current = settings.weeklyHours[day];
@@ -140,6 +158,8 @@ export function AgendaClient() {
         minNoticeHours: settings.minNoticeHours,
         maxDaysAhead: settings.maxDaysAhead,
         timezone: settings.timezone.trim(),
+        modalities: settings.modalities,
+        address: settings.address?.trim() ? settings.address.trim() : null,
         connector: settings.connector,
         meetingLink: settings.meetingLink?.trim()
           ? settings.meetingLink.trim()
@@ -292,7 +312,7 @@ export function AgendaClient() {
               id="tz"
               value={settings.timezone}
               onChange={(e) => patch({ timezone: e.target.value })}
-              placeholder="America/Mexico_City"
+              placeholder="America/Lima"
             />
           </div>
         </CardContent>
@@ -300,11 +320,72 @@ export function AgendaClient() {
 
       <Card>
         <CardHeader>
+          <CardTitle>Cómo se atiende la cita</CardTitle>
+          <CardDescription>
+            Lo que el asistente le ofrece al cliente. Si marcas más de una, le
+            pregunta cuál prefiere antes de reservar.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {MODALITY_ORDER.map((m) => {
+            const meta = MODALITY_META[m];
+            const active = settings.modalities.includes(m);
+            return (
+              <label
+                key={m}
+                className={cn(
+                  "flex cursor-pointer items-start gap-3 rounded-sm border px-3 py-2.5 transition-colors",
+                  active ? "border-brand bg-brand-tint" : "border-border hover:bg-accent"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={active}
+                  onChange={() => toggleModality(m)}
+                />
+                <span>
+                  <span
+                    className={cn(
+                      "block text-sm font-semibold",
+                      active && "text-brand-text"
+                    )}
+                  >
+                    {meta.label}
+                  </span>
+                  <span className="mt-0.5 block text-xs text-text-2">
+                    {meta.description}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+          {settings.modalities.includes("presencial") && (
+            <div className="space-y-1.5 pt-1">
+              <Label htmlFor="address">Dirección del local</Label>
+              <Input
+                id="address"
+                value={settings.address ?? ""}
+                onChange={(e) => patch({ address: e.target.value })}
+                placeholder="Av. El Sol 123, Cusco"
+              />
+              <p className="text-xs text-text-3">
+                Va en la confirmación de las citas presenciales y en el evento
+                de tu calendario.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Cómo se entrega la reunión</CardTitle>
           <CardDescription>
-            El enlace fijo no depende de nadie. Los demás conectan con tu propia
-            cuenta del proveedor y, si alguna vez falla, la cita se agenda igual
-            y el enlace queda pendiente de reintentar.
+            Google deja cada cita en tu calendario y te avisa en el celular,
+            sea presencial, llamada o videollamada. El enlace fijo y Zoom solo
+            importan para videollamadas. Si el proveedor falla, la cita se
+            agenda igual.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">

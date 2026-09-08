@@ -1,5 +1,12 @@
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
+import { startPoller } from "@/server/jobs/poller";
+
+/** Arranque del runtime Node: limpieza + la cola del agente (T1.2). */
+export async function boot(): Promise<void> {
+  await cleanupOrphanRuns();
+  startPoller();
+}
 
 /**
  * Limpieza al arranque (FR-034): corridas del Laboratorio que quedaron

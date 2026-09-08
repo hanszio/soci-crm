@@ -19,6 +19,55 @@ export function renderKb(entries: KbEntry[]): string {
 }
 
 /**
+ * La oferta vigente, con el instante exacto al lado de la etiqueta humana:
+ * es lo único que hace posible que "mañana a las 10" se convierta en un
+ * book_slot válido.
+ */
+export function renderOffers(
+  offers: { startUtc: string; label: string }[]
+): string {
+  if (offers.length === 0) {
+    return "OFERTA VIGENTE DE HORARIOS: (ninguna todavía — antes de book_slot tienes que usar offer_slots)";
+  }
+  const lines = offers.map((o) => `- startUtc="${o.startUtc}" → ${o.label}`);
+  return [
+    "OFERTA VIGENTE DE HORARIOS (los ÚNICOS que puedes reservar; copia el startUtc exacto):",
+    ...lines,
+  ].join("\n");
+}
+
+/**
+ * Cómo escribe una persona por WhatsApp. Va en todos los modos: la brevedad
+ * no es una política, es lo que hace que el cliente no note que es un bot.
+ */
+export const STYLE_RULES = [
+  "ESTILO (obligatorio):",
+  "- Escribe como una persona por WhatsApp: 1 a 3 líneas. Sin listas salvo horarios, sin firmas, sin repetir el saludo si ya saludaste.",
+  "- Si el cliente solo confirma, agradece o dice \"ok\", responde igual de corto (\"dale\", \"perfecto\", \"a ti\", \"listo\"). No expliques lo que no preguntó.",
+  "- Explica largo SOLO cuando la pregunta lo necesita, y aun así en frases cortas.",
+  "- Máximo una pregunta por mensaje. No repitas información que ya diste.",
+].join("\n");
+
+const MODALITY_LABEL: Record<string, string> = {
+  presencial: "presencial (el cliente va al local)",
+  llamada: "llamada (el negocio lo llama a este número)",
+  videollamada: "videollamada (se le manda un enlace)",
+};
+
+/** Qué modalidades hay y cuándo preguntar por ella. */
+export function renderModalityRule(
+  modalities: string[],
+  address: string | null
+): string {
+  const list = modalities.map((m) => MODALITY_LABEL[m] ?? m).join("; ");
+  const where = address ? ` El local está en: ${address}.` : "";
+  if (modalities.length === 1) {
+    return `- Modalidad de la cita: solo ${list}.${where} No preguntes modalidad: book_slot siempre con modality="${modalities[0]}".`;
+  }
+  return `- Modalidades de la cita: ${list}.${where} Antes de reservar pregunta cuál prefiere (UNA sola pregunta, puede ir junto con la elección del horario) y pásala en book_slot.modality. Si ya la dijo, no vuelvas a preguntar.`;
+}
+
+/**
  * System prompt del agente (v1: inyecta el KB completo — el límite se
  * documenta con el contador de tamaño en la UI).
  */
@@ -31,24 +80,47 @@ export function buildAgentSystemPrompt(input: {
    * token en hablar de horarios: la agenda no existe aquí.
    */
   agenda?: boolean;
+  /**
+   * La oferta VIGENTE de horarios de esta conversación (startUtc + etiqueta).
+   * Sin esto el modelo ve la lista como texto y no puede devolver el instante
+   * exacto que `book_slot` exige — y se queda re-ofreciendo en bucle.
+   */
+  offers?: { startUtc: string; label: string }[];
+  /** "viernes 4 de septiembre de 2026, 09:12 (America/Lima)". */
+  now?: string;
+  /** Modalidades que ofrece el negocio (presencial, llamada, videollamada). */
+  modalities?: ("presencial" | "llamada" | "videollamada")[];
+  /** Dirección del local, para que el modelo la mencione al ofrecer presencial. */
+  address?: string | null;
 }): string {
   const { profile } = input;
   const stageNames = input.stages.map((s) => s.name).join(" | ");
+  const modalities = input.modalities?.length
+    ? input.modalities
+    : ["presencial", "llamada"];
   const agendaLines = input.agenda
     ? [
         '- {"action":"offer_slots","reply":"..."} — ofrecer horarios para agendar (reply es solo la frase de entrada; los horarios los pone el sistema).',
-        '- {"action":"book_slot","startUtc":"<uno de los horarios que el sistema ofreció, en ISO UTC>","reply":"..."} — agendar el horario que el cliente eligió.',
+        `- {"action":"book_slot","startUtc":"<uno de los horarios que el sistema ofreció, en ISO UTC>","modality":"<${modalities.join("|")}>","reply":"..."} — agendar el horario que el cliente eligió.`,
       ]
     : [];
   const agendaRules = input.agenda
     ? [
         "- NUNCA escribas tú los horarios ni los inventes: usa offer_slots y el sistema pega los reales.",
-        "- book_slot solo acepta un horario que el sistema ofreció antes en ESTA conversación. Si el cliente pide otro, vuelve a ofrecer con offer_slots.",
+        "- book_slot solo acepta un startUtc de la OFERTA VIGENTE de abajo, copiado tal cual. Si el cliente pide un día u hora que no está en la lista, vuelve a ofrecer con offer_slots.",
+        "- Si el cliente elige uno de los horarios ofrecidos, aunque lo diga en palabras (\"mañana a las 10\", \"el segundo\", \"ese\"), responde book_slot con su startUtc: NO repitas la lista.",
         "- Si el cliente quiere CANCELAR una cita → handoff: esa decisión no es tuya.",
+        renderModalityRule(modalities, input.address ?? null),
       ]
     : [];
+  const offerBlock = input.agenda ? renderOffers(input.offers ?? []) : null;
+  const cita = profile.escalationMode === "cita" && Boolean(input.agenda);
   return [
     `Eres "${profile.name}", el asistente de WhatsApp de este negocio. Respondes SIEMPRE en español neutro, con mensajes breves y naturales para chat.`,
+    cita
+      ? "TU OBJETIVO en cada conversación es llegar a una cita (presencial o llamada con un asesor). Resuelve dudas con el conocimiento y, cuando el cliente muestre interés, pida algo que solo un asesor puede resolver (precio final, cotización formal, pedido, reclamo) o pida hablar con alguien, propón agendar. Nunca dejes al cliente sin respuesta."
+      : null,
+    STYLE_RULES,
     profile.tone ? `Tono: ${profile.tone}` : null,
     profile.instructions ? `Instrucciones del negocio:\n${profile.instructions}` : null,
     profile.escalationRules
@@ -57,6 +129,8 @@ export function buildAgentSystemPrompt(input: {
     profile.greeting ? `Saludo sugerido para conversaciones nuevas: ${profile.greeting}` : null,
     `CONOCIMIENTO DEL NEGOCIO (tu única fuente de verdad; si algo no está aquí, NO lo inventes — di que lo confirmarás con el equipo o escala):\n${renderKb(input.kb)}`,
     `Etapas del pipeline disponibles: ${stageNames}`,
+    input.now ? `Fecha y hora actual: ${input.now}` : null,
+    offerBlock,
     [
       "En cada turno respondes ÚNICAMENTE un objeto JSON con UNA acción:",
       '- {"action":"none"} — no responder nada.',
@@ -66,8 +140,12 @@ export function buildAgentSystemPrompt(input: {
       '- {"action":"handoff","reason":"...","farewell":"..."} — escalar a un humano (farewell opcional para despedirte).',
       ...agendaLines,
       "Reglas duras:",
-      "- Si el cliente pide hablar con una persona/humano/asesor → handoff.",
-      "- Si la pregunta NO está cubierta por el conocimiento → NO inventes: responde que lo confirmarás o escala.",
+      cita
+        ? "- Si el cliente pide hablar con una persona/humano/asesor → NO uses handoff: dile que le agendas una llamada con un asesor y usa offer_slots; cuando elija horario, book_slot con modality=\"llamada\". Handoff solo si quiere CANCELAR una cita o se pone hostil."
+        : "- Si el cliente pide hablar con una persona/humano/asesor → handoff.",
+      cita
+        ? "- Si la pregunta NO está cubierta por el conocimiento → NO inventes: di que lo confirmas con el equipo y propón agendar una llamada para resolverlo."
+        : "- Si la pregunta NO está cubierta por el conocimiento → NO inventes: responde que lo confirmarás o escala.",
       "- Si detectas intención clara de compra → move_stage a la etapa de interesados y confirma al cliente.",
       ...agendaRules,
       "- JSON puro, sin markdown ni texto adicional.",
@@ -91,7 +169,7 @@ export function buildJudgePrompt(input: {
     "- verde: sin problemas relevantes. amarillo: mejorable. rojo: falla grave.",
     "- `sugerencia` es opcional: inclúyela cuando una nueva entrada P/R del knowledge base evitaría el problema.",
     "- Si el agente respondió sobre un tema que NO está en el conocimiento → hallazgo fuera_de_kb (o alucinacion si afirmó datos concretos).",
-    "- Si el cliente pidió un humano y no hubo escalado → debio_escalar.",
+    "- Si el cliente pidió un humano y el agente ni escaló ni le ofreció agendar una llamada con un asesor → debio_escalar. Ofrecer una llamada agendada CUENTA como escalar.",
   ].join("\n");
 
   const transcript = input.transcript

@@ -327,6 +327,47 @@ describe("google", () => {
     );
   });
 
+  it("una cita presencial crea el evento con dirección y avisos, SIN pedir Meet", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/token")) {
+        return Response.json({ access_token: "tk", expires_in: 3600 });
+      }
+      if (init?.method === "POST") {
+        bodies.push(JSON.parse(String(init.body)));
+        return Response.json({ id: "evt_p" });
+      }
+      return Response.json({ id: "evt_p" });
+    });
+    const out = await googleConnector.createMeeting(creds, {
+      ...REQ,
+      modality: "presencial",
+      location: "Av. El Sol 123, Cusco",
+    });
+    expect(out).toEqual({ externalId: "evt_p", joinUrl: null });
+    const body = bodies[0]!;
+    expect(body.conferenceData).toBeUndefined();
+    expect(body.location).toBe("Av. El Sol 123, Cusco");
+    // El aviso al dueño es el calendario mismo: dos recordatorios en el celular.
+    expect(body.reminders).toEqual({
+      useDefault: false,
+      overrides: [
+        { method: "popup", minutes: 30 },
+        { method: "popup", minutes: 10 },
+      ],
+    });
+    // Y no se queda re-leyendo el evento esperando un enlace que no pidió.
+    expect(fetchMock.mock.calls.filter(([, i]) => (i as RequestInit | undefined)?.method === "GET" || !(i as RequestInit | undefined)?.method).length).toBe(0);
+  });
+
+  it("una videollamada sigue pidiendo Meet como siempre", async () => {
+    const out = await googleConnector.createMeeting(creds, {
+      ...REQ,
+      modality: "videollamada",
+    });
+    expect(out.joinUrl).toBe("https://meet.google.test/abc");
+  });
+
   it("reconectar con OTRO refresh token bajo el mismo clientId+calendarId no reutiliza el access token viejo", async () => {
     // Bug real: la clave de caché solo incluía clientId+calendarId. Reconectar
     // (p. ej. tras ampliar el scope) con un refresh token nuevo pero el mismo
