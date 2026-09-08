@@ -597,6 +597,9 @@ export const agentProfile = pgTable(
     escalationMode: text("escalation_mode", { enum: ["cita", "humano"] })
       .notNull()
       .default("cita"),
+    /** Retraso "humano" antes de contestar, en segundos (T1.2). */
+    delayMinSec: integer("delay_min_sec").notNull().default(10),
+    delayMaxSec: integer("delay_max_sec").notNull().default(300),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -1046,3 +1049,39 @@ export const capiSettings = pgTable(
 
 // T1.1/T1.6 — configuración de IA por organización y medición de uso.
 export * from "./schema/ai";
+
+/**
+ * T1.2 — La cola persistente. Un turno programado sobrevive a un redeploy.
+ * `conversation_id` va desnormalizado del payload para el índice único
+ * parcial: una conversación tiene como mucho UN trabajo de cada tipo en cola.
+ */
+export const agentJob = pgTable(
+  "agent_job",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: ["agent_turn", "agent_typing"] }).notNull(),
+    conversationId: text("conversation_id").notNull(),
+    payload: jsonb("payload").notNull().default({}),
+    runAt: timestamp("run_at").notNull(),
+    status: text("status", {
+      enum: ["queued", "running", "done", "failed", "cancelled"],
+    })
+      .notNull()
+      .default("queued"),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
+    lastError: text("last_error"),
+    lockedAt: timestamp("locked_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [
+    index("agent_job_due_idx").on(t.status, t.runAt),
+    uniqueIndex("agent_job_queued_uq")
+      .on(t.kind, t.conversationId)
+      .where(sql`${t.status} = 'queued'`),
+  ]
+);

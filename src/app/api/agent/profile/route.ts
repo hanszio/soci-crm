@@ -24,6 +24,8 @@ export const GET = withAuth(async (session) => {
       escalationRules: p.escalationRules,
       greeting: p.greeting,
       escalationMode: p.escalationMode,
+      delayMinSec: p.delayMinSec,
+      delayMaxSec: p.delayMaxSec,
     },
     aiConfigured: await isAiAvailable(session.organizationId),
   });
@@ -37,6 +39,8 @@ const putSchema = z.object({
   escalationRules: z.string().max(4000).nullable().optional(),
   greeting: z.string().max(1000).nullable().optional(),
   escalationMode: z.enum(["cita", "humano"]).optional(),
+  delayMinSec: z.number().int().min(0).max(900).optional(),
+  delayMaxSec: z.number().int().min(0).max(1800).optional(),
 });
 
 export const PUT = withAuth(async (session, req: Request) => {
