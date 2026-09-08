@@ -36,6 +36,25 @@ export function renderOffers(
   ].join("\n");
 }
 
+const MODALITY_LABEL: Record<string, string> = {
+  presencial: "presencial (el cliente va al local)",
+  llamada: "llamada (el negocio lo llama a este número)",
+  videollamada: "videollamada (se le manda un enlace)",
+};
+
+/** Qué modalidades hay y cuándo preguntar por ella. */
+export function renderModalityRule(
+  modalities: string[],
+  address: string | null
+): string {
+  const list = modalities.map((m) => MODALITY_LABEL[m] ?? m).join("; ");
+  const where = address ? ` El local está en: ${address}.` : "";
+  if (modalities.length === 1) {
+    return `- Modalidad de la cita: solo ${list}.${where} No preguntes modalidad: book_slot siempre con modality="${modalities[0]}".`;
+  }
+  return `- Modalidades de la cita: ${list}.${where} Antes de reservar pregunta cuál prefiere (UNA sola pregunta, puede ir junto con la elección del horario) y pásala en book_slot.modality. Si ya la dijo, no vuelvas a preguntar.`;
+}
+
 /**
  * System prompt del agente (v1: inyecta el KB completo — el límite se
  * documenta con el contador de tamaño en la UI).
@@ -57,13 +76,20 @@ export function buildAgentSystemPrompt(input: {
   offers?: { startUtc: string; label: string }[];
   /** "viernes 4 de septiembre de 2026, 09:12 (America/Lima)". */
   now?: string;
+  /** Modalidades que ofrece el negocio (presencial, llamada, videollamada). */
+  modalities?: ("presencial" | "llamada" | "videollamada")[];
+  /** Dirección del local, para que el modelo la mencione al ofrecer presencial. */
+  address?: string | null;
 }): string {
   const { profile } = input;
   const stageNames = input.stages.map((s) => s.name).join(" | ");
+  const modalities = input.modalities?.length
+    ? input.modalities
+    : ["presencial", "llamada"];
   const agendaLines = input.agenda
     ? [
         '- {"action":"offer_slots","reply":"..."} — ofrecer horarios para agendar (reply es solo la frase de entrada; los horarios los pone el sistema).',
-        '- {"action":"book_slot","startUtc":"<uno de los horarios que el sistema ofreció, en ISO UTC>","reply":"..."} — agendar el horario que el cliente eligió.',
+        `- {"action":"book_slot","startUtc":"<uno de los horarios que el sistema ofreció, en ISO UTC>","modality":"<${modalities.join("|")}>","reply":"..."} — agendar el horario que el cliente eligió.`,
       ]
     : [];
   const agendaRules = input.agenda
@@ -72,6 +98,7 @@ export function buildAgentSystemPrompt(input: {
         "- book_slot solo acepta un startUtc de la OFERTA VIGENTE de abajo, copiado tal cual. Si el cliente pide un día u hora que no está en la lista, vuelve a ofrecer con offer_slots.",
         "- Si el cliente elige uno de los horarios ofrecidos, aunque lo diga en palabras (\"mañana a las 10\", \"el segundo\", \"ese\"), responde book_slot con su startUtc: NO repitas la lista.",
         "- Si el cliente quiere CANCELAR una cita → handoff: esa decisión no es tuya.",
+        renderModalityRule(modalities, input.address ?? null),
       ]
     : [];
   const offerBlock = input.agenda ? renderOffers(input.offers ?? []) : null;

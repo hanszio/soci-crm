@@ -20,6 +20,7 @@ const postSchema = z.discriminatedUnion("kind", [
     conversationId: z.string().min(1).nullish(),
     startUtc: z.string().min(1),
     notes: z.string().nullish(),
+    modality: z.enum(["presencial", "llamada", "videollamada"]).nullish(),
   }),
   z.object({
     kind: z.literal("block"),
@@ -61,6 +62,7 @@ export const POST = withAuth(async (session, req: Request) => {
       conversationId: body.data.conversationId ?? null,
       startUtc: body.data.startUtc,
       notes: body.data.notes ?? null,
+      modality: body.data.modality ?? null,
       source: "manual",
       requireOffer: false,
     });

@@ -687,7 +687,14 @@ export const calendarSettings = pgTable(
     bufferMinutes: integer("buffer_minutes").notNull().default(0),
     minNoticeHours: integer("min_notice_hours").notNull().default(2),
     maxDaysAhead: integer("max_days_ahead").notNull().default(7),
-    timezone: text("timezone").notNull().default("America/Mexico_City"),
+    timezone: text("timezone").notNull().default("America/Lima"),
+    /**
+     * Modalidades que el negocio ofrece: `["presencial","llamada"]` por
+     * defecto — ninguna depende de un enlace. `videollamada` se enciende aparte.
+     */
+    modalities: jsonb("modalities").notNull().default(["presencial", "llamada"]),
+    /** Dirección del local; va en la confirmación de las citas presenciales. */
+    address: text("address"),
     /**
      * Cómo se entrega la reunión. `enlace-fijo` no habla con nadie: es el
      * default y la razón de que encender la agenda no exija terceros.
@@ -731,6 +738,13 @@ export const booking = pgTable(
       onDelete: "set null",
     }),
     leadId: text("lead_id").references(() => lead.id, { onDelete: "set null" }),
+    /**
+     * Cómo se atiende: presencial | llamada | videollamada. Null en citas
+     * anteriores a la columna (se leen como videollamada, que era lo único).
+     */
+    modality: text("modality", {
+      enum: ["presencial", "llamada", "videollamada"],
+    }),
     /** Instante UTC. El horario semanal es de pared; esto ya está resuelto. */
     scheduledAt: timestamp("scheduled_at").notNull(),
     /** Capturada al crear: cambiar la configuración no reescribe el pasado. */

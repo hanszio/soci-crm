@@ -165,6 +165,8 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   // modelo no puede reservar, y sin la fecha no sabe qué día es "mañana".
   let offers: { startUtc: string; label: string }[] = [];
   let now: string | undefined;
+  let modalities: ("presencial" | "llamada" | "videollamada")[] | undefined;
+  let address: string | null = null;
   if (agenda) {
     try {
       const [settings, current] = await Promise.all([
@@ -173,6 +175,8 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
       ]);
       offers = current;
       now = formatNow(new Date(), settings.timezone);
+      modalities = settings.modalities;
+      address = settings.address;
     } catch (err) {
       console.warn(`[agente] no pude leer la oferta vigente: ${err}`);
     }
@@ -187,6 +191,8 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
         agenda,
         offers,
         now,
+        modalities,
+        address,
       }),
     },
     ...history
@@ -230,6 +236,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
                 conversationId,
                 startUtc: action.startUtc,
                 confirmation: action.reply,
+                modality: action.modality,
               });
         await deliverReply(conversation, turn.text);
         if (turn.ok) {

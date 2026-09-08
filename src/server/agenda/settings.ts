@@ -13,6 +13,11 @@ import {
   type Interval,
   type WeekdayKey,
 } from "@/lib/time/slots";
+import {
+  DEFAULT_MODALITIES,
+  normalizeModalities,
+  type Modality,
+} from "@/lib/agenda-modalities";
 
 /**
  * 015 — La configuración de la agenda del negocio (una por organización):
@@ -21,7 +26,7 @@ import {
 
 export type WeeklyHours = Partial<Record<WeekdayKey, Interval[]>>;
 
-export const DEFAULT_TIMEZONE = "America/Mexico_City";
+export const DEFAULT_TIMEZONE = "America/Lima";
 
 /** L-V 09:00-18:00 — se ajusta en Ajustes → Agenda. */
 export const DEFAULT_WEEKLY_HOURS: WeeklyHours = {
@@ -39,6 +44,10 @@ export type CalendarSettings = {
   minNoticeHours: number;
   maxDaysAhead: number;
   timezone: string;
+  /** Qué modalidades puede elegir el cliente. Nunca vacío. */
+  modalities: Modality[];
+  /** Dirección del local para las citas presenciales. */
+  address: string | null;
   /** Cómo se entrega la reunión. */
   connector: ConnectorId;
   /** Sala fija del conector `enlace-fijo`; null ⇒ citas sin link. */
@@ -53,6 +62,8 @@ export const DEFAULT_CALENDAR_SETTINGS: CalendarSettings = {
   minNoticeHours: 2,
   maxDaysAhead: 7,
   timezone: DEFAULT_TIMEZONE,
+  modalities: [...DEFAULT_MODALITIES],
+  address: null,
   connector: DEFAULT_CONNECTOR,
   meetingLink: null,
 };
@@ -85,11 +96,18 @@ export async function getSettings(
     minNoticeHours: row.minNoticeHours,
     maxDaysAhead: row.maxDaysAhead,
     timezone: row.timezone,
+    modalities: withFallback(normalizeModalities(row.modalities)),
+    address: row.address,
     // Un conector que ya no existe en el código (p. ej. venías de un fork) no
     // puede dejar la agenda inservible: se degrada al soberano.
     connector: isConnectorId(row.connector) ? row.connector : DEFAULT_CONNECTOR,
     meetingLink: row.meetingLink,
   };
+}
+
+/** Una lista vacía dejaría al agente sin nada que ofrecer: cae al default. */
+function withFallback(modalities: Modality[]): Modality[] {
+  return modalities.length > 0 ? modalities : [...DEFAULT_MODALITIES];
 }
 
 export class CalendarSettingsError extends Error {
@@ -106,10 +124,11 @@ export class CalendarSettingsError extends Error {
  * comprobación que no ocurre.
  */
 export type CalendarSettingsInput = Partial<
-  Omit<CalendarSettings, "weeklyHours" | "connector">
+  Omit<CalendarSettings, "weeklyHours" | "connector" | "modalities">
 > & {
   weeklyHours?: unknown;
   connector?: string;
+  modalities?: unknown;
 };
 
 export async function upsertSettings(
@@ -154,6 +173,14 @@ export async function upsertSettings(
       LIMITS.maxDaysAhead.max
     ),
     timezone,
+    modalities: withFallback(
+      input.modalities !== undefined
+        ? normalizeModalities(input.modalities)
+        : current.modalities
+    ),
+    address: normalizeLink(
+      input.address !== undefined ? input.address : current.address
+    ),
     connector,
     meetingLink: normalizeLink(
       input.meetingLink !== undefined ? input.meetingLink : current.meetingLink
@@ -168,6 +195,8 @@ export async function upsertSettings(
     minNoticeHours: next.minNoticeHours,
     maxDaysAhead: next.maxDaysAhead,
     timezone: next.timezone,
+    modalities: next.modalities,
+    address: next.address,
     connector: next.connector,
     meetingLink: next.meetingLink,
   };

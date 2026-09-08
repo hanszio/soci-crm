@@ -15,7 +15,9 @@ import { daysWithAgenda, spreadByDay } from "@/server/agenda/spread";
 const MX = "America/Mexico_City";
 
 function settings(over: Partial<CalendarSettings> = {}): CalendarSettings {
-  return { ...DEFAULT_CALENDAR_SETTINGS, ...over };
+  // La zona se fija aquí: el default de la instancia (Lima) no es el de estos
+  // casos, que están escritos en hora de México.
+  return { ...DEFAULT_CALENDAR_SETTINGS, timezone: "America/Mexico_City", ...over };
 }
 
 describe("buildCandidateSlots", () => {

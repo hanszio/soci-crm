@@ -27,6 +27,7 @@ const createSchema = z.object({
   conversationId: z.string().min(1),
   startUtc: z.string().min(1),
   notes: z.string().nullish(),
+  modality: z.enum(["presencial", "llamada", "videollamada"]).nullish(),
 });
 
 const rescheduleSchema = z.object({
@@ -47,6 +48,7 @@ export async function POST(req: Request) {
       conversationId: body.data.conversationId,
       startUtc: body.data.startUtc,
       notes: body.data.notes ?? null,
+      modality: body.data.modality ?? null,
       source: "ai",
       // La regla innegociable: el agente solo reserva lo que ya ofreció.
       requireOffer: true,
