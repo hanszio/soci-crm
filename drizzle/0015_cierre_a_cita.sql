@@ -1,0 +1,1 @@
+ALTER TABLE "agent_profile" ADD COLUMN "escalation_mode" text DEFAULT 'cita' NOT NULL;

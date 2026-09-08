@@ -106,6 +106,13 @@
       "when": 1788842414844,
       "tag": "0014_modalidad_cita",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1788842747419,
+      "tag": "0015_cierre_a_cita",
+      "breakpoints": true
     }
   ]
 }
