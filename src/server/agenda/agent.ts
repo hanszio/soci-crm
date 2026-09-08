@@ -75,6 +75,8 @@ export async function bookSlot(input: {
   conversationId: string;
   startUtc: string;
   confirmation?: string;
+  /** Lo que eligió el cliente; el motor decide si está permitida. */
+  modality?: string | null;
 }): Promise<AgendaTurn> {
   try {
     const result = await createSessionBooking({
@@ -83,10 +85,22 @@ export async function bookSlot(input: {
       startUtc: input.startUtc,
       source: "ai",
       requireOffer: true,
+      modality: input.modality,
     });
 
     const base =
       input.confirmation?.trim() || `¡Listo! Te agendé para ${result.label}.`;
+    if (result.modality === "presencial") {
+      return {
+        ok: true,
+        text: result.address
+          ? `${base}\nTe esperamos en ${result.address}.`
+          : base,
+      };
+    }
+    if (result.modality === "llamada") {
+      return { ok: true, text: `${base}\nTe llamamos a este mismo número.` };
+    }
     if (result.meetingLink) {
       return { ok: true, text: `${base}\nEnlace: ${result.meetingLink}` };
     }

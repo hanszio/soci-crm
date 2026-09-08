@@ -46,6 +46,10 @@ const putSchema = z.object({
     })
     .optional(),
   meetingLink: z.string().nullish(),
+  // Se normaliza en el servicio: lo desconocido se descarta, lo vacío cae al
+  // default. Aquí solo se exige la forma.
+  modalities: z.array(z.string()).optional(),
+  address: z.string().nullish(),
 });
 
 /**
@@ -65,6 +69,7 @@ export const PUT = withAuth(async (session, req: Request) => {
       // `undefined` = no lo tocaron; `null` = lo vaciaron a propósito.
       meetingLink:
         body.data.meetingLink === undefined ? undefined : body.data.meetingLink,
+      address: body.data.address === undefined ? undefined : body.data.address,
     });
     return Response.json({ settings });
   } catch (err) {

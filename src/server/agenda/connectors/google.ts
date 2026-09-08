@@ -157,6 +157,10 @@ export const googleConnector: AgendaConnector<GoogleCreds> = {
     const endUtc = new Date(
       Date.parse(req.startUtc) + req.durationMinutes * 60_000
     ).toISOString();
+    // Solo la videollamada pide Meet. Una cita presencial o una llamada deja
+    // el evento en el calendario del dueño — con la dirección y los avisos —
+    // sin inventarle una sala que nadie va a usar.
+    const wantsMeet = !req.modality || req.modality === "videollamada";
 
     const created = (await googleFetch(
       creds,
@@ -166,16 +170,28 @@ export const googleConnector: AgendaConnector<GoogleCreds> = {
         body: JSON.stringify({
           summary: req.topic,
           description: req.notes ?? undefined,
+          location: req.location ?? undefined,
           start: { dateTime: req.startUtc, timeZone: "UTC" },
           end: { dateTime: endUtc, timeZone: "UTC" },
-          conferenceData: {
-            createRequest: {
-              // Google exige un id de petición propio; el instante lo hace
-              // único por cita sin necesitar aleatoriedad.
-              requestId: `vocero-${Date.parse(req.startUtc)}`,
-              conferenceSolutionKey: { type: "hangoutsMeet" },
-            },
+          // El aviso al dueño es el calendario mismo: Google le notifica en el
+          // celular sin que el CRM tenga que mandarle nada.
+          reminders: {
+            useDefault: false,
+            overrides: [
+              { method: "popup", minutes: 30 },
+              { method: "popup", minutes: 10 },
+            ],
           },
+          conferenceData: wantsMeet
+            ? {
+                createRequest: {
+                  // Google exige un id de petición propio; el instante lo hace
+                  // único por cita sin necesitar aleatoriedad.
+                  requestId: `vocero-${Date.parse(req.startUtc)}`,
+                  conferenceSolutionKey: { type: "hangoutsMeet" },
+                },
+              }
+            : undefined,
         }),
       }
     )) as GoogleEvent | null;
@@ -184,6 +200,8 @@ export const googleConnector: AgendaConnector<GoogleCreds> = {
     if (!eventId) {
       throw new ConnectorError("google", "Google no devolvió el evento creado");
     }
+
+    if (!wantsMeet) return { externalId: eventId, joinUrl: null };
 
     let link = meetLinkOf(created);
     // La conferencia se genera en segundo plano: la respuesta del insert suele

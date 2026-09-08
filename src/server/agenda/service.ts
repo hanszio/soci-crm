@@ -24,6 +24,11 @@ import {
 import { ConnectorError } from "@/server/agenda/connectors/types";
 import { moveLeadToStage } from "@/server/leads/stage-history";
 import { publish } from "@/server/events/bus";
+import {
+  MODALITY_META,
+  resolveModality,
+  type Modality,
+} from "@/lib/agenda-modalities";
 
 /**
  * 015 — Ciclo de vida de la cita y las dos reglas INNEGOCIABLES:
@@ -75,6 +80,9 @@ export type BookingResult = {
   meetingLink: string | null;
   linkPending: boolean;
   label: string;
+  modality: Modality;
+  /** Dirección del negocio si la cita es presencial; null en las demás. */
+  address: string | null;
 };
 
 /** Cuántas alternativas se devuelven cuando el hueco se ocupó. */
@@ -95,10 +103,13 @@ export async function createSessionBooking(input: {
    * que reserva sin oferta previa.
    */
   requireOffer: boolean;
+  /** Cómo se atiende; si falta o no está permitida, decide el negocio. */
+  modality?: string | null;
   now?: Date;
 }): Promise<BookingResult> {
   const db = getDb();
   const settings = await getSettings(input.organizationId);
+  const modality = resolveModality(input.modality, settings.modalities);
 
   if (Number.isNaN(Date.parse(input.startUtc))) {
     throw new BookingError("invalid", "Instante inválido");
@@ -107,7 +118,7 @@ export async function createSessionBooking(input: {
   // Contexto de la conversación: contacto y si es del Laboratorio.
   let isTest = false;
   let contactId = input.contactId ?? null;
-  let contactName = "";
+  let contact: ContactInfo = { name: "", phone: null };
   if (input.conversationId) {
     const rows = await db
       .select({
@@ -132,7 +143,7 @@ export async function createSessionBooking(input: {
   if (!contactId) {
     throw new BookingError("invalid", "La cita necesita un contacto");
   }
-  contactName = await getContactName(input.organizationId, contactId);
+  contact = await getContactInfo(input.organizationId, contactId);
 
   // REGLA 1: solo se reserva lo que se ofreció.
   if (input.requireOffer) {
@@ -191,6 +202,7 @@ export async function createSessionBooking(input: {
         contactId,
         conversationId: input.conversationId ?? null,
         leadId: leadRows[0]?.id ?? null,
+        modality,
         scheduledAt: new Date(slot.startUtc),
         durationMinutes: settings.slotMinutes,
         // Copia histórica: si el negocio cambia de conector, esta cita conserva
@@ -227,7 +239,7 @@ export async function createSessionBooking(input: {
   }
 
   // Efectos secundarios: ninguno puede revertir la cita.
-  const delivered = await deliverMeeting(booking, settings, contactName);
+  const delivered = await deliverMeeting(booking, settings, contact);
   await advanceLeadStage(
     input.organizationId,
     contactId,
@@ -246,6 +258,8 @@ export async function createSessionBooking(input: {
     meetingLink: delivered.meetingLink,
     linkPending: delivered.linkPending,
     label: labelInTz(slot.startUtc, settings.timezone),
+    modality,
+    address: modality === "presencial" ? settings.address : null,
   };
 }
 
@@ -339,11 +353,14 @@ export async function rescheduleBooking(input: {
     type: "booking.updated",
     data: { bookingId: next.id },
   });
+  const modality = modalityOf(next);
   return {
     booking: next,
     meetingLink: next.meetingLink,
     linkPending: next.linkPending,
     label: labelInTz(slot.startUtc, settings.timezone),
+    modality,
+    address: modality === "presencial" ? settings.address : null,
   };
 }
 
@@ -484,21 +501,29 @@ export async function retryMeetingLink(input: {
     throw new BookingError("invalid", "Esta cita no tiene un enlace pendiente");
   }
   const settings = await getSettings(input.organizationId);
-  const contactName = booking.contactId
-    ? await getContactName(input.organizationId, booking.contactId)
-    : "";
-  const delivered = await deliverMeeting(booking, settings, contactName);
+  const contact = booking.contactId
+    ? await getContactInfo(input.organizationId, booking.contactId)
+    : { name: "", phone: null };
+  const delivered = await deliverMeeting(booking, settings, contact);
 
   publish(input.organizationId, {
     type: "booking.updated",
     data: { bookingId: delivered.id },
   });
+  const modality = modalityOf(delivered);
   return {
     booking: delivered,
     meetingLink: delivered.meetingLink,
     linkPending: delivered.linkPending,
     label: labelInTz(delivered.scheduledAt.toISOString(), settings.timezone),
+    modality,
+    address: modality === "presencial" ? settings.address : null,
   };
+}
+
+/** Citas anteriores a la columna eran, todas, videollamadas. */
+function modalityOf(booking: BookingRow): Modality {
+  return booking.modality ?? "videollamada";
 }
 
 /**
@@ -511,10 +536,19 @@ export async function retryMeetingLink(input: {
 async function deliverMeeting(
   booking: BookingRow,
   settings: CalendarSettings,
-  contactName: string
+  contact: ContactInfo
 ): Promise<BookingRow> {
   if (booking.isTest) return booking;
   const connectorId = (booking.connector ?? settings.connector) as ConnectorId;
+  const modality = modalityOf(booking);
+  const needsLink = MODALITY_META[modality].needsLink;
+
+  // Una cita sin enlace (presencial, llamada) solo le importa al conector si
+  // ese conector deja el evento en el calendario del dueño: es su aviso. A
+  // Zoom o a la sala fija no hay nada que pedirles.
+  if (!needsLink && !CONNECTOR_META[connectorId].writesCalendarEvent) {
+    return booking;
+  }
 
   try {
     const conn = await bindConnector(
@@ -530,11 +564,16 @@ async function deliverMeeting(
       booking.externalRef && conn.refreshMeeting
         ? await conn.refreshMeeting(booking.externalRef)
         : await conn.createMeeting({
-            topic: contactName ? `Cita — ${contactName}` : "Cita",
+            topic: meetingTopic(modality, contact.name),
             startUtc: booking.scheduledAt.toISOString(),
             durationMinutes: booking.durationMinutes,
             timezone: settings.timezone,
-            notes: booking.notes ?? undefined,
+            notes: meetingNotes(modality, contact, booking.notes, settings),
+            modality,
+            location:
+              modality === "presencial"
+                ? (settings.address ?? undefined)
+                : undefined,
           });
 
     return await persistDelivery(booking.id, {
@@ -542,8 +581,12 @@ async function deliverMeeting(
       meetingLink: meeting.joinUrl,
       // Un conector que promete enlace por cita y no lo trajo todavía deja la
       // cita "sin enlace" — reintentable. `enlace-fijo` sin sala configurada,
-      // en cambio, no tiene nada pendiente: simplemente no hay enlace.
-      linkPending: CONNECTOR_META[connectorId].perBookingLink && !meeting.joinUrl,
+      // en cambio, no tiene nada pendiente: simplemente no hay enlace. Y una
+      // cita que no necesita enlace nunca lo tiene pendiente.
+      linkPending:
+        needsLink &&
+        CONNECTOR_META[connectorId].perBookingLink &&
+        !meeting.joinUrl,
     });
   } catch (err) {
     console.warn(
@@ -560,9 +603,46 @@ async function deliverMeeting(
     return await persistDelivery(booking.id, {
       externalRef: booking.externalRef,
       meetingLink: null,
-      linkPending: true,
+      linkPending: needsLink,
     });
   }
+}
+
+type ContactInfo = { name: string; phone: string | null };
+
+/** "Cita presencial — Ana" / "Llamada — Ana" / "Videollamada — Ana". */
+export function meetingTopic(modality: Modality, name: string): string {
+  const kind =
+    modality === "presencial"
+      ? "Cita presencial"
+      : modality === "llamada"
+        ? "Llamada"
+        : "Videollamada";
+  return name ? `${kind} — ${name}` : kind;
+}
+
+/**
+ * La descripción del evento es el aviso completo al dueño: quién, cómo
+ * contactarlo y cómo se atiende — todo lo que necesita sin abrir el CRM.
+ */
+export function meetingNotes(
+  modality: Modality,
+  contact: ContactInfo,
+  notes: string | null | undefined,
+  settings: Pick<CalendarSettings, "address">
+): string {
+  const lines: string[] = [`Modalidad: ${MODALITY_META[modality].label}`];
+  if (contact.name) lines.push(`Cliente: ${contact.name}`);
+  if (contact.phone) {
+    const digits = contact.phone.replace(/\D/g, "");
+    lines.push(`WhatsApp: +${digits} — https://wa.me/${digits}`);
+  }
+  if (modality === "presencial" && settings.address) {
+    lines.push(`Lugar: ${settings.address}`);
+  }
+  if (notes) lines.push(`Notas: ${notes}`);
+  lines.push("Agendada desde el CRM.");
+  return lines.join("\n");
 }
 
 async function persistDelivery(
@@ -666,13 +746,13 @@ async function getOwnBooking(
   return rows[0];
 }
 
-async function getContactName(
+async function getContactInfo(
   organizationId: string,
   contactId: string
-): Promise<string> {
+): Promise<ContactInfo> {
   const db = getDb();
   const rows = await db
-    .select({ name: schema.contact.name })
+    .select({ name: schema.contact.name, phone: schema.contact.phone })
     .from(schema.contact)
     .where(
       scoped(
@@ -682,7 +762,7 @@ async function getContactName(
       )
     )
     .limit(1);
-  return rows[0]?.name ?? "";
+  return { name: rows[0]?.name ?? "", phone: rows[0]?.phone ?? null };
 }
 
 /**

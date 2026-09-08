@@ -21,11 +21,18 @@ type Booking = {
   weekday: string;
   contact: { id: string; name: string } | null;
   conversationId: string | null;
+  modality: "presencial" | "llamada" | "videollamada";
   connector: string | null;
   meetingLink: string | null;
   linkPending: boolean;
   isTest: boolean;
   notes: string | null;
+};
+
+const MODALITY_LABEL: Record<Booking["modality"], string> = {
+  presencial: "Presencial",
+  llamada: "Llamada",
+  videollamada: "Videollamada",
 };
 
 type Slot = { startUtc: string; label: string };
@@ -187,14 +194,19 @@ export function BookingsClient() {
                 {b.kind === "block" ? (
                   <Badge variant="secondary">Bloqueo</Badge>
                 ) : (
-                  <Badge variant="secondary">
-                    {b.source === "ai" ? "Agendó la IA" : "Manual"}
-                  </Badge>
+                  <>
+                    <Badge variant="secondary">{MODALITY_LABEL[b.modality]}</Badge>
+                    <Badge variant="secondary">
+                      {b.source === "ai" ? "Agendó la IA" : "Manual"}
+                    </Badge>
+                  </>
                 )}
                 {b.isTest && <Badge variant="secondary">Prueba</Badge>}
-                {b.linkPending && b.status !== "cancelada" && (
-                  <Badge variant="secondary">Sin enlace</Badge>
-                )}
+                {b.linkPending &&
+                  b.modality === "videollamada" &&
+                  b.status !== "cancelada" && (
+                    <Badge variant="secondary">Sin enlace</Badge>
+                  )}
               </div>
 
               <div className="flex flex-wrap items-center gap-3 text-sm text-text-3">

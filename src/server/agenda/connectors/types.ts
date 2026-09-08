@@ -29,6 +29,13 @@ export type MeetingRequest = {
   /** Zona IANA del negocio: el proveedor la usa para mostrarla a los suyos. */
   timezone: string;
   notes?: string;
+  /**
+   * Cómo se atiende. Solo `videollamada` (o ausente, por compatibilidad) pide
+   * un enlace al proveedor; las demás solo dejan el evento en el calendario.
+   */
+  modality?: "presencial" | "llamada" | "videollamada";
+  /** Dirección del local: va como `location` del evento en las presenciales. */
+  location?: string;
 };
 
 export type MeetingResult = {
