@@ -64,3 +64,29 @@ export function isHandoffAction(
 ): action is Extract<AgentActionType, { action: "handoff" }> {
   return action.action === "handoff";
 }
+
+/**
+ * Horarios escritos por el modelo. La regla dice "NUNCA escribas tú los
+ * horarios", pero un modelo débil copia la lista vieja del historial
+ * ("mañana viernes 4" un martes 8). Un día + una hora en la misma frase es la
+ * firma de una lista de huecos; el horario de atención ("de lunes a viernes
+ * de 9:00 a 18:00") se excluye a propósito.
+ */
+const SLOT_LINE =
+  /\b(hoy|mañana|pasado mañana|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b[^.\n]{0,80}?\b\d{1,2}:\d{2}\b/i;
+const BUSINESS_HOURS = /de lunes a|atendemos|horario de atenci[oó]n|abrimos|cerramos/i;
+
+export function looksLikeInventedSlots(text: string): boolean {
+  if (BUSINESS_HOURS.test(text)) return false;
+  return SLOT_LINE.test(text);
+}
+
+/**
+ * Quita las frases con horarios y deja el resto como introducción de una
+ * oferta REAL. Si no queda nada, el motor pone su frase de siempre.
+ */
+export function stripSlotSentences(text: string): string {
+  const parts = text.split(/(?<=[.!?])\s+|\n+/);
+  const kept = parts.filter((p) => p.trim() && !SLOT_LINE.test(p));
+  return kept.join(" ").replace(/\s+/g, " ").trim();
+}
