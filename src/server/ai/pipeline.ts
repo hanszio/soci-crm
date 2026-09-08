@@ -18,6 +18,8 @@ import { matchesHandoffIntent } from "@/server/ai/handoff";
 import { buildAgentSystemPrompt } from "@/server/ai/prompts";
 import { agendaEnabled } from "@/server/agenda/flag";
 import { bookSlot, offerSlots } from "@/server/agenda/agent";
+import { getOffers } from "@/server/agenda/offers";
+import { getSettings } from "@/server/agenda/settings";
 
 /**
  * Turno del agente (FR-021..FR-025).
@@ -159,10 +161,33 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     .orderBy(asc(schema.pipelineStage.position));
 
   const agenda = agendaEnabled();
+  // La oferta vigente y la hora actual van al prompt: sin el startUtc exacto el
+  // modelo no puede reservar, y sin la fecha no sabe qué día es "mañana".
+  let offers: { startUtc: string; label: string }[] = [];
+  let now: string | undefined;
+  if (agenda) {
+    try {
+      const [settings, current] = await Promise.all([
+        getSettings(organizationId),
+        getOffers(organizationId, conversationId),
+      ]);
+      offers = current;
+      now = formatNow(new Date(), settings.timezone);
+    } catch (err) {
+      console.warn(`[agente] no pude leer la oferta vigente: ${err}`);
+    }
+  }
   const messages: ChatMessage[] = [
     {
       role: "system",
-      content: buildAgentSystemPrompt({ profile, kb, stages, agenda }),
+      content: buildAgentSystemPrompt({
+        profile,
+        kb,
+        stages,
+        agenda,
+        offers,
+        now,
+      }),
     },
     ...history
       .filter((m) => m.text)
@@ -257,6 +282,21 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
       return;
     }
   }
+}
+
+/** "viernes 4 de septiembre de 2026, 09:12 (America/Lima)". */
+export function formatNow(date: Date, timezone: string): string {
+  const text = new Intl.DateTimeFormat("es", {
+    timeZone: timezone,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+  return `${text} (${timezone})`;
 }
 
 /** Texto fijo al escalar por la regex de respaldo (sin pasar por el modelo). */

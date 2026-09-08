@@ -19,6 +19,24 @@ export function renderKb(entries: KbEntry[]): string {
 }
 
 /**
+ * La oferta vigente, con el instante exacto al lado de la etiqueta humana:
+ * es lo único que hace posible que "mañana a las 10" se convierta en un
+ * book_slot válido.
+ */
+export function renderOffers(
+  offers: { startUtc: string; label: string }[]
+): string {
+  if (offers.length === 0) {
+    return "OFERTA VIGENTE DE HORARIOS: (ninguna todavía — antes de book_slot tienes que usar offer_slots)";
+  }
+  const lines = offers.map((o) => `- startUtc="${o.startUtc}" → ${o.label}`);
+  return [
+    "OFERTA VIGENTE DE HORARIOS (los ÚNICOS que puedes reservar; copia el startUtc exacto):",
+    ...lines,
+  ].join("\n");
+}
+
+/**
  * System prompt del agente (v1: inyecta el KB completo — el límite se
  * documenta con el contador de tamaño en la UI).
  */
@@ -31,6 +49,14 @@ export function buildAgentSystemPrompt(input: {
    * token en hablar de horarios: la agenda no existe aquí.
    */
   agenda?: boolean;
+  /**
+   * La oferta VIGENTE de horarios de esta conversación (startUtc + etiqueta).
+   * Sin esto el modelo ve la lista como texto y no puede devolver el instante
+   * exacto que `book_slot` exige — y se queda re-ofreciendo en bucle.
+   */
+  offers?: { startUtc: string; label: string }[];
+  /** "viernes 4 de septiembre de 2026, 09:12 (America/Lima)". */
+  now?: string;
 }): string {
   const { profile } = input;
   const stageNames = input.stages.map((s) => s.name).join(" | ");
@@ -43,10 +69,12 @@ export function buildAgentSystemPrompt(input: {
   const agendaRules = input.agenda
     ? [
         "- NUNCA escribas tú los horarios ni los inventes: usa offer_slots y el sistema pega los reales.",
-        "- book_slot solo acepta un horario que el sistema ofreció antes en ESTA conversación. Si el cliente pide otro, vuelve a ofrecer con offer_slots.",
+        "- book_slot solo acepta un startUtc de la OFERTA VIGENTE de abajo, copiado tal cual. Si el cliente pide un día u hora que no está en la lista, vuelve a ofrecer con offer_slots.",
+        "- Si el cliente elige uno de los horarios ofrecidos, aunque lo diga en palabras (\"mañana a las 10\", \"el segundo\", \"ese\"), responde book_slot con su startUtc: NO repitas la lista.",
         "- Si el cliente quiere CANCELAR una cita → handoff: esa decisión no es tuya.",
       ]
     : [];
+  const offerBlock = input.agenda ? renderOffers(input.offers ?? []) : null;
   return [
     `Eres "${profile.name}", el asistente de WhatsApp de este negocio. Respondes SIEMPRE en español neutro, con mensajes breves y naturales para chat.`,
     profile.tone ? `Tono: ${profile.tone}` : null,
@@ -57,6 +85,8 @@ export function buildAgentSystemPrompt(input: {
     profile.greeting ? `Saludo sugerido para conversaciones nuevas: ${profile.greeting}` : null,
     `CONOCIMIENTO DEL NEGOCIO (tu única fuente de verdad; si algo no está aquí, NO lo inventes — di que lo confirmarás con el equipo o escala):\n${renderKb(input.kb)}`,
     `Etapas del pipeline disponibles: ${stageNames}`,
+    input.now ? `Fecha y hora actual: ${input.now}` : null,
+    offerBlock,
     [
       "En cada turno respondes ÚNICAMENTE un objeto JSON con UNA acción:",
       '- {"action":"none"} — no responder nada.',
