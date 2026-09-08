@@ -112,3 +112,32 @@ describe("el prompt según la política", () => {
     expect(system).toContain("Ofrecer una llamada agendada CUENTA como escalar");
   });
 });
+
+describe("horarios inventados por el modelo", () => {
+  it("detecta una lista de huecos escrita a mano (día + hora)", async () => {
+    const { looksLikeInventedSlots } = await import("@/server/ai/policy");
+    expect(
+      looksLikeInventedSlots(
+        "¿Prefieres presencial o llamada? Tenemos horarios mañana viernes 4 de septiembre a las 09:00, 09:30 o 10:00."
+      )
+    ).toBe(true);
+    expect(looksLikeInventedSlots("Te agendo el jueves a las 10:00.")).toBe(true);
+  });
+
+  it("no confunde el horario de atención ni una respuesta normal", async () => {
+    const { looksLikeInventedSlots } = await import("@/server/ai/policy");
+    expect(looksLikeInventedSlots("Atendemos de lunes a viernes de 9:00 a 18:00.")).toBe(false);
+    expect(looksLikeInventedSlots("El millar de tarjetas sale desde S/ 80.")).toBe(false);
+    expect(looksLikeInventedSlots("¿Prefieres la cita presencial o una llamada?")).toBe(false);
+  });
+
+  it("deja la introducción sin los horarios", async () => {
+    const { stripSlotSentences } = await import("@/server/ai/policy");
+    expect(
+      stripSlotSentences(
+        "¿Prefieres la cita presencial en la tienda o una llamada? Tenemos horarios mañana viernes 4 de septiembre a las 09:00, 09:30 o 10:00."
+      )
+    ).toBe("¿Prefieres la cita presencial en la tienda o una llamada?");
+    expect(stripSlotSentences("Mañana martes a las 10:00 te espero.")).toBe("");
+  });
+});

@@ -25,8 +25,10 @@ import {
   AFTER_BOOKING_FAREWELL,
   CALL_OFFER_INTRO,
   decideEscalation,
+  looksLikeInventedSlots,
   nextProviderRetry,
   PROVIDER_DOWN_REPLY,
+  stripSlotSentences,
 } from "@/server/ai/policy";
 
 /**
@@ -257,6 +259,15 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     if (decision.kind === "offer_call") {
       action = { action: "offer_slots", reply: CALL_OFFER_INTRO };
     }
+  }
+
+  // Guardarraíl: el modelo escribió horarios él mismo (copiados del historial
+  // o inventados). Se convierte en una oferta real; lo demás del texto queda
+  // como introducción.
+  if (agenda && action.action === "reply" && looksLikeInventedSlots(action.text)) {
+    console.warn(`[agente] el modelo redactó horarios; se re-ofrece con los reales`);
+    const intro = stripSlotSentences(action.text);
+    action = { action: "offer_slots", reply: intro || undefined };
   }
 
   // 015 — Agenda. Un fallo del motor degrada el turno (el agente responde sin

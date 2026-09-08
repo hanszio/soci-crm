@@ -106,7 +106,8 @@ export function buildAgentSystemPrompt(input: {
     : [];
   const agendaRules = input.agenda
     ? [
-        "- NUNCA escribas tú los horarios ni los inventes: usa offer_slots y el sistema pega los reales.",
+        "- NUNCA escribas tú los horarios ni los inventes: usa offer_slots y el sistema pega los reales. Si quieres proponer horarios, tu acción es offer_slots, no reply.",
+        "- Los horarios que aparecen en mensajes ANTERIORES de esta conversación están VENCIDOS: no los repitas ni los uses. Solo vale la OFERTA VIGENTE de abajo.",
         "- book_slot solo acepta un startUtc de la OFERTA VIGENTE de abajo, copiado tal cual. Si el cliente pide un día u hora que no está en la lista, vuelve a ofrecer con offer_slots.",
         "- Si el cliente elige uno de los horarios ofrecidos, aunque lo diga en palabras (\"mañana a las 10\", \"el segundo\", \"ese\"), responde book_slot con su startUtc: NO repitas la lista.",
         "- Si el cliente quiere CANCELAR una cita → handoff: esa decisión no es tuya.",
