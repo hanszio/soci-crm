@@ -18,6 +18,8 @@ const profile = {
   escalationRules: null,
   greeting: null,
   escalationMode: "cita" as const,
+  delayMinSec: 10,
+  delayMaxSec: 300,
   createdAt: new Date(),
   updatedAt: new Date(),
 };

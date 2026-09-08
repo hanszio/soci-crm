@@ -3,8 +3,8 @@ import { getDb, schema } from "@/lib/db";
 import { newId } from "@/lib/db/ids";
 import { scoped } from "@/lib/db/tenant";
 import { moveLeadToStage as moveLeadThroughHistory } from "@/server/leads/stage-history";
-import { getEnv } from "@/lib/env";
 import { chatJson, type ChatMessage } from "@/lib/ai";
+import { enqueue } from "@/server/jobs/queue";
 import { publish } from "@/server/events/bus";
 import { isWindowOpen } from "@/server/inbox/window";
 import { SendError, sendText } from "@/server/inbox/send";
@@ -32,68 +32,37 @@ import {
 /**
  * Turno del agente (FR-021..FR-025).
  *
- * Coalesce + lock in-process por conversación: ráfagas de mensajes → UNA
- * respuesta; nunca dos turnos simultáneos; lo que llega durante un turno
- * re-encola exactamente un turno más. Suficiente para el monolito de una
- * instancia (sin colas externas — Constitución II).
+ * La programación vive en la cola persistente (T1.2, `server/jobs`): una
+ * ráfaga de mensajes pospone el único turno pendiente de la conversación, y
+ * un redeploy en mitad del retraso humano no pierde la respuesta. Aquí solo
+ * queda el candado in-process contra dos turnos simultáneos.
  */
 
-type CoalesceEntry = {
-  timer: ReturnType<typeof setTimeout> | null;
-  running: boolean;
-  pending: boolean;
-};
+type RunningMap = Map<string, true>;
 
-const globalForAgent = globalThis as unknown as {
-  __agentCoalesce?: Map<string, CoalesceEntry>;
-};
+const globalForAgent = globalThis as unknown as { __agentRunning?: RunningMap };
 
-function coalesceMap(): Map<string, CoalesceEntry> {
-  if (!globalForAgent.__agentCoalesce) {
-    globalForAgent.__agentCoalesce = new Map();
-  }
-  return globalForAgent.__agentCoalesce;
+function runningMap(): RunningMap {
+  if (!globalForAgent.__agentRunning) globalForAgent.__agentRunning = new Map();
+  return globalForAgent.__agentRunning;
 }
 
-/** Punto de entrada con debounce (mensajes entrantes reales). */
-export function scheduleAgentTurn(conversationId: string): void {
-  const map = coalesceMap();
-  const entry = map.get(conversationId) ?? {
-    timer: null,
-    running: false,
-    pending: false,
-  };
-  map.set(conversationId, entry);
-
-  if (entry.running) {
-    entry.pending = true; // se re-encola al terminar el turno actual
-    return;
-  }
-  if (entry.timer) clearTimeout(entry.timer);
-  const delay = getEnv().AGENT_COALESCE_MS;
-  entry.timer = setTimeout(() => {
-    entry.timer = null;
-    void executeTurn(conversationId);
-  }, delay);
-}
-
-async function executeTurn(conversationId: string): Promise<void> {
-  const map = coalesceMap();
-  const entry = map.get(conversationId);
-  if (!entry || entry.running) return;
-  entry.running = true;
+/**
+ * Corre UN turno si esa conversación no tiene otro en curso. La cola (T1.2)
+ * garantiza un solo trabajo pendiente por conversación; esto cubre el hueco
+ * entre dos trabajos que vencieron seguidos.
+ */
+export async function runAgentTurnExclusive(
+  conversationId: string
+): Promise<"ran" | "busy"> {
+  const map = runningMap();
+  if (map.has(conversationId)) return "busy";
+  map.set(conversationId, true);
   try {
     await runAgentTurn(conversationId);
-  } catch (err) {
-    console.error("[agente] turno falló:", err);
+    return "ran";
   } finally {
-    entry.running = false;
-    if (entry.pending) {
-      entry.pending = false;
-      void executeTurn(conversationId);
-    } else {
-      map.delete(conversationId);
-    }
+    map.delete(conversationId);
   }
 }
 
@@ -251,7 +220,12 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
       console.warn(
         `[agente] reintento ${attempt + 1} del turno en ${Math.round(delay / 1000)}s`
       );
-      setTimeout(() => scheduleAgentTurn(conversationId), delay).unref?.();
+      await enqueue({
+        organizationId,
+        kind: "agent_turn",
+        conversationId,
+        runAt: new Date(Date.now() + delay),
+      });
       return;
     }
     clearRetry(conversationId);

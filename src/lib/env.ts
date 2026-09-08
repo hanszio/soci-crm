@@ -71,6 +71,10 @@ const envSchema = z.object({
   GOOGLE_OAUTH_BASE_URL: z.string().url().default("https://oauth2.googleapis.com"),
   ALLOW_SIGNUP: z.string().optional(),
   AGENT_COALESCE_MS: z.coerce.number().int().min(0).default(6000),
+  // T1.2: `human` = retraso natural antes de contestar (lo configura cada
+  // negocio en Ajustes → Agente); `instant` = sin retraso (tests, mocks).
+  AGENT_DELAY_MODE: z.enum(["human", "instant"]).default("human"),
+  AGENT_JOB_POLL_MS: z.coerce.number().int().min(250).default(2000),
   WA_MOCK_ENABLED: z.string().optional(),
   // API key de un cerebro externo que conduzca la conversación por /api/bot/*.
   // Sin ella, toda esa superficie responde 401.
