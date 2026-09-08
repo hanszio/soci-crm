@@ -259,6 +259,24 @@ Contratos compartidos (fijados antes de lanzar, para que las tareas corran en pa
 
 **Integración fase 1** (QA): merge T1.1 → T1.2 → T1.3 → T1.4 → T1.6 → T1.5; `pnpm db:generate` (una migración `0013_fase1.sql`); staging; prueba con WhatsApp real: pedir cita, confirmar en Google Calendar, verificar silencio del bot; tag `v0.2.0`.
 
+### Fase 1b — Cierre a cita (hecho 2026-09-08, `v0.3.0`)
+
+Disparador: prueba real del 2026-09-03 — el cliente eligió "mañana a las 10" tres veces y el bot re-ofreció la misma lista; además el dueño no vive en el dashboard, así que un handoff mudo deja al cliente sin respuesta. Todo va en `phase/1`, cada tarea en su worktree `task/T1.x-*`, migraciones 0014–0016.
+
+| Tarea | Qué | Dónde |
+|---|---|---|
+| T1.11 | Caché del token de Google incluye hash del refresh token (bug real: reconectar seguía usando el token viejo ~1 h) | `agenda/connectors/google.ts` |
+| T1.12 | La oferta vigente (startUtc + etiqueta) y la fecha/hora actual van al prompt; regla "elegir en palabras ⇒ book_slot, no re-listar" | `ai/prompts.ts`, `ai/pipeline.ts` |
+| T1.4 | Modalidad `presencial \| llamada \| videollamada` (`booking.modality`, `calendar_settings.modalities` default `["presencial","llamada"]`, `address`); el agente pregunta solo si hay más de una; UI en Ajustes → Agenda y Citas; zona por defecto `America/Lima` | `lib/agenda-modalities.ts`, `agenda/service.ts`, `agenda/agent.ts` |
+| T1.13 | El evento de Google ES el aviso al dueño: título "Cita presencial — Ana", descripción con WhatsApp clicable (wa.me), lugar y modalidad, recordatorios popup 30/10 min; Meet solo en videollamada; `location` en presencial | `agenda/connectors/google.ts`, `agenda/service.ts` |
+| T1.3 + T1.14 | Política de cierre (`agent_profile.escalation_mode` = `cita` \| `humano`): con `cita`, pedir humano ⇒ ofrecer llamada agendada (regex y modelo), salvo cita activa / cancelar / hostilidad; proveedor caído ⇒ reintentos 30 s/2 min/5 min y solo después aviso + handoff `error`; tras agendar ⇒ despedida + handoff `cita_agendada`. Juez del Lab acepta la llamada agendada como escalado | `ai/policy.ts`, `ai/pipeline.ts`, `ai/prompts.ts` |
+| T1.2 | Cola persistente `agent_job` (un trabajo pendiente por conversación, `FOR UPDATE SKIP LOCKED`, backoff, re-encolado de huérfanos al arrancar) + retraso humano por intención (`jobs/delay.ts`, rango en Ajustes → Agente, 10–300 s) + "escribiendo…" antes de responder. `AGENT_DELAY_MODE=instant` para tests | `server/jobs/*`, `ai/trigger.ts`, `instrumentation-node.ts` |
+| Estilo | Reglas de estilo en el prompt: 1–3 líneas, "ok"/"dale" ante confirmaciones, una pregunta por mensaje, sin repetir | `ai/prompts.ts` |
+
+Verificación: gate técnico verde (455 unit) y E2E `pnpm test:e2e` 137/137 contra la app con mocks (BD limpia en `docker` puerto 5433, `.env` local). Smoke vivo con wa-mock: "quiero hablar con un asesor" ⇒ `agent_job` done, sin handoff, oferta de llamada con horarios reales.
+
+Pendiente de esta fase: aviso al dueño por WhatsApp (exige plantilla aprobada por Meta — Fase 6); horario de atención del agente (fuera de horario); reintentos de proveedor persistidos en la cola (hoy contador en memoria).
+
 ---
 
 ## Fase 2 — Seguridad del agente (3 días)
