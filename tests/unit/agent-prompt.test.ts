@@ -17,6 +17,7 @@ const profile = {
   instructions: null,
   escalationRules: null,
   greeting: null,
+  escalationMode: "cita" as const,
   createdAt: new Date(),
   updatedAt: new Date(),
 };

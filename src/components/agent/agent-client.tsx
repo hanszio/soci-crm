@@ -16,6 +16,7 @@ type Profile = {
   instructions: string | null;
   escalationRules: string | null;
   greeting: string | null;
+  escalationMode: "cita" | "humano";
 };
 
 type KbEntry = {
@@ -164,6 +165,23 @@ function ProfileSection({
             value={form.instructions ?? ""}
             onChange={(e) => setForm({ ...form, instructions: e.target.value })}
           />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="agent-escalation-mode">Cuando piden un humano</Label>
+          <select
+            id="agent-escalation-mode"
+            className="h-9 w-full rounded-sm border border-border bg-background px-2 text-sm"
+            value={form.escalationMode}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                escalationMode: e.target.value as Profile["escalationMode"],
+              })
+            }
+          >
+            <option value="cita">Agendar una llamada con un asesor (el agente sigue hasta cerrar la cita)</option>
+            <option value="humano">Pausar la IA de inmediato y avisar en la bandeja</option>
+          </select>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="agent-escalation">Reglas de escalado</Label>

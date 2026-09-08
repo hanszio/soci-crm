@@ -36,6 +36,18 @@ export function renderOffers(
   ].join("\n");
 }
 
+/**
+ * Cómo escribe una persona por WhatsApp. Va en todos los modos: la brevedad
+ * no es una política, es lo que hace que el cliente no note que es un bot.
+ */
+export const STYLE_RULES = [
+  "ESTILO (obligatorio):",
+  "- Escribe como una persona por WhatsApp: 1 a 3 líneas. Sin listas salvo horarios, sin firmas, sin repetir el saludo si ya saludaste.",
+  "- Si el cliente solo confirma, agradece o dice \"ok\", responde igual de corto (\"dale\", \"perfecto\", \"a ti\", \"listo\"). No expliques lo que no preguntó.",
+  "- Explica largo SOLO cuando la pregunta lo necesita, y aun así en frases cortas.",
+  "- Máximo una pregunta por mensaje. No repitas información que ya diste.",
+].join("\n");
+
 const MODALITY_LABEL: Record<string, string> = {
   presencial: "presencial (el cliente va al local)",
   llamada: "llamada (el negocio lo llama a este número)",
@@ -102,8 +114,13 @@ export function buildAgentSystemPrompt(input: {
       ]
     : [];
   const offerBlock = input.agenda ? renderOffers(input.offers ?? []) : null;
+  const cita = profile.escalationMode === "cita" && Boolean(input.agenda);
   return [
     `Eres "${profile.name}", el asistente de WhatsApp de este negocio. Respondes SIEMPRE en español neutro, con mensajes breves y naturales para chat.`,
+    cita
+      ? "TU OBJETIVO en cada conversación es llegar a una cita (presencial o llamada con un asesor). Resuelve dudas con el conocimiento y, cuando el cliente muestre interés, pida algo que solo un asesor puede resolver (precio final, cotización formal, pedido, reclamo) o pida hablar con alguien, propón agendar. Nunca dejes al cliente sin respuesta."
+      : null,
+    STYLE_RULES,
     profile.tone ? `Tono: ${profile.tone}` : null,
     profile.instructions ? `Instrucciones del negocio:\n${profile.instructions}` : null,
     profile.escalationRules
@@ -123,8 +140,12 @@ export function buildAgentSystemPrompt(input: {
       '- {"action":"handoff","reason":"...","farewell":"..."} — escalar a un humano (farewell opcional para despedirte).',
       ...agendaLines,
       "Reglas duras:",
-      "- Si el cliente pide hablar con una persona/humano/asesor → handoff.",
-      "- Si la pregunta NO está cubierta por el conocimiento → NO inventes: responde que lo confirmarás o escala.",
+      cita
+        ? "- Si el cliente pide hablar con una persona/humano/asesor → NO uses handoff: dile que le agendas una llamada con un asesor y usa offer_slots; cuando elija horario, book_slot con modality=\"llamada\". Handoff solo si quiere CANCELAR una cita o se pone hostil."
+        : "- Si el cliente pide hablar con una persona/humano/asesor → handoff.",
+      cita
+        ? "- Si la pregunta NO está cubierta por el conocimiento → NO inventes: di que lo confirmas con el equipo y propón agendar una llamada para resolverlo."
+        : "- Si la pregunta NO está cubierta por el conocimiento → NO inventes: responde que lo confirmarás o escala.",
       "- Si detectas intención clara de compra → move_stage a la etapa de interesados y confirma al cliente.",
       ...agendaRules,
       "- JSON puro, sin markdown ni texto adicional.",
@@ -148,7 +169,7 @@ export function buildJudgePrompt(input: {
     "- verde: sin problemas relevantes. amarillo: mejorable. rojo: falla grave.",
     "- `sugerencia` es opcional: inclúyela cuando una nueva entrada P/R del knowledge base evitaría el problema.",
     "- Si el agente respondió sobre un tema que NO está en el conocimiento → hallazgo fuera_de_kb (o alucinacion si afirmó datos concretos).",
-    "- Si el cliente pidió un humano y no hubo escalado → debio_escalar.",
+    "- Si el cliente pidió un humano y el agente ni escaló ni le ofreció agendar una llamada con un asesor → debio_escalar. Ofrecer una llamada agendada CUENTA como escalar.",
   ].join("\n");
 
   const transcript = input.transcript

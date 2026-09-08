@@ -20,6 +20,14 @@ import { agendaEnabled } from "@/server/agenda/flag";
 import { bookSlot, offerSlots } from "@/server/agenda/agent";
 import { getOffers } from "@/server/agenda/offers";
 import { getSettings } from "@/server/agenda/settings";
+import { hasActiveBooking } from "@/server/agenda/service";
+import {
+  AFTER_BOOKING_FAREWELL,
+  CALL_OFFER_INTRO,
+  decideEscalation,
+  nextProviderRetry,
+  PROVIDER_DOWN_REPLY,
+} from "@/server/ai/policy";
 
 /**
  * Turno del agente (FR-021..FR-025).
@@ -137,9 +145,34 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     return;
   }
 
-  // Patrón de respaldo ANTES del LLM (FR-022). Avisa al cliente antes de
-  // callarse: un handoff mudo se ve como "no me respondieron".
+  const agenda = agendaEnabled();
+
+  // Patrón de respaldo ANTES del LLM (FR-022). Con la política `cita`, pedir
+  // un humano se convierte en ofrecer una llamada agendada: el dueño no vive
+  // en el dashboard, y un handoff mudo se ve como "no me respondieron".
   if (lastInbound.text && matchesHandoffIntent(lastInbound.text)) {
+    const decision = decideEscalation({
+      mode: profile.escalationMode,
+      agenda,
+      hasActiveBooking: await hasActiveBooking(
+        organizationId,
+        conversation.contactId
+      ).catch(() => false),
+      reason: null,
+    });
+    if (decision.kind === "offer_call") {
+      try {
+        const turn = await offerSlots({
+          organizationId,
+          conversationId,
+          intro: CALL_OFFER_INTRO,
+        });
+        await deliverReply(conversation, turn.text);
+        return;
+      } catch (err) {
+        console.error(`[agente] no pude ofrecer la llamada, escalo: ${err}`);
+      }
+    }
     try {
       await deliverReply(conversation, HANDOFF_FAREWELL);
     } catch (err) {
@@ -160,7 +193,6 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     .where(eq(schema.pipelineStage.organizationId, organizationId))
     .orderBy(asc(schema.pipelineStage.position));
 
-  const agenda = agendaEnabled();
   // La oferta vigente y la hora actual van al prompt: sin el startUtc exacto el
   // modelo no puede reservar, y sin la fecha no sabe qué día es "mañana".
   let offers: { startUtc: string; label: string }[] = [];
@@ -209,13 +241,49 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   });
   if (!result.ok) {
     if (result.error === "not_configured") return;
-    // Fallo persistente del proveedor o salida imposible → escalar (FR-022).
     console.error(`[agente] fallo del proveedor (raw): ${result.detail}`);
+    // Un hipo del proveedor no puede dejar al cliente sin respuesta ni pausar
+    // la IA para siempre: se reintenta el turno con espera creciente y solo
+    // al agotar los intentos se avisa al cliente y se escala.
+    const attempt = bumpRetry(conversationId);
+    const delay = nextProviderRetry(attempt);
+    if (delay !== null) {
+      console.warn(
+        `[agente] reintento ${attempt + 1} del turno en ${Math.round(delay / 1000)}s`
+      );
+      setTimeout(() => scheduleAgentTurn(conversationId), delay).unref?.();
+      return;
+    }
+    clearRetry(conversationId);
+    try {
+      await deliverReply(conversation, PROVIDER_DOWN_REPLY);
+    } catch (err) {
+      console.error("[agente] no pude avisar la caída del proveedor:", err);
+    }
     await applyHandoff(conversationId, organizationId, "error");
     return;
   }
+  clearRetry(conversationId);
 
   let action: AgentActionType = result.data;
+
+  // Política de cierre: el modelo quiere escalar, pero con `cita` eso se
+  // convierte en ofrecer una llamada, salvo que ya haya cita o el motivo sea
+  // de los que sí ameritan parar (cancelar, hostilidad).
+  if (action.action === "handoff") {
+    const decision = decideEscalation({
+      mode: profile.escalationMode,
+      agenda,
+      hasActiveBooking: await hasActiveBooking(
+        organizationId,
+        conversation.contactId
+      ).catch(() => false),
+      reason: action.reason ?? null,
+    });
+    if (decision.kind === "offer_call") {
+      action = { action: "offer_slots", reply: CALL_OFFER_INTRO };
+    }
+  }
 
   // 015 — Agenda. Un fallo del motor degrada el turno (el agente responde sin
   // agendar), nunca lo tumba: quedarse callado es peor que no agendar.
@@ -238,8 +306,16 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
                 confirmation: action.reply,
                 modality: action.modality,
               });
-        await deliverReply(conversation, turn.text);
-        if (turn.ok) {
+        const booked = action.action === "book_slot" && turn.ok;
+        await deliverReply(
+          conversation,
+          booked ? `${turn.text}\n${AFTER_BOOKING_FAREWELL}` : turn.text
+        );
+        if (booked) {
+          // La cita es el cierre: de aquí en adelante habla el equipo. El lead
+          // ya avanzó de etapa dentro del motor de agenda.
+          await applyHandoff(conversationId, organizationId, "cita_agendada");
+        } else if (turn.ok) {
           publish(organizationId, {
             type: "conversation.updated",
             data: { conversation: { id: conversationId } },
@@ -359,10 +435,23 @@ async function persistTestOutbound(
     .where(eq(schema.conversation.id, conversation.id));
 }
 
+/** Reintentos del turno por caída del proveedor, por conversación. */
+const providerRetries = new Map<string, number>();
+
+function bumpRetry(conversationId: string): number {
+  const attempt = providerRetries.get(conversationId) ?? 0;
+  providerRetries.set(conversationId, attempt + 1);
+  return attempt;
+}
+
+function clearRetry(conversationId: string): void {
+  providerRetries.delete(conversationId);
+}
+
 export async function applyHandoff(
   conversationId: string,
   organizationId: string,
-  reason: "cliente" | "modelo" | "error" | "ventana"
+  reason: "cliente" | "modelo" | "error" | "ventana" | "cita_agendada"
 ): Promise<void> {
   const db = getDb();
   const updated = await db

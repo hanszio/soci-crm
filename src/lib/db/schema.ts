@@ -344,6 +344,7 @@ export const conversation = pgTable(
     handoffReason: text("handoff_reason", {
       // 008: manual_reply = el dueño respondió desde la app del teléfono.
       // hostilidad = el lead se puso agresivo y el agente se retiró.
+      // cita_agendada = el agente cerró una cita y le pasa el hilo al equipo.
       enum: [
         "cliente",
         "modelo",
@@ -351,6 +352,7 @@ export const conversation = pgTable(
         "ventana",
         "hostilidad",
         "manual_reply",
+        "cita_agendada",
       ],
     }),
     lastInboundAt: timestamp("last_inbound_at"),
@@ -588,6 +590,13 @@ export const agentProfile = pgTable(
     instructions: text("instructions"),
     escalationRules: text("escalation_rules"),
     greeting: text("greeting"),
+    /**
+     * `cita`: pedir un humano se convierte en agendar una llamada; la IA solo
+     * se calla tras la cita. `humano`: pedir un humano pausa la IA (clásico).
+     */
+    escalationMode: text("escalation_mode", { enum: ["cita", "humano"] })
+      .notNull()
+      .default("cita"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

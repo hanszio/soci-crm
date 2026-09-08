@@ -83,6 +83,7 @@ describe("el prompt y las modalidades", () => {
     instructions: null,
     escalationRules: null,
     greeting: null,
+    escalationMode: "cita" as const,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
