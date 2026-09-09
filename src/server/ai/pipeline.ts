@@ -7,7 +7,8 @@ import { chatJson, type ChatMessage } from "@/lib/ai";
 import { enqueue } from "@/server/jobs/queue";
 import { publish } from "@/server/events/bus";
 import { isWindowOpen } from "@/server/inbox/window";
-import { SendError, sendText } from "@/server/inbox/send";
+import { SendError, sendMediaMessage, sendText } from "@/server/inbox/send";
+import { getSendableItem, listActiveItems, readItemFile } from "@/server/catalog/items";
 import {
   agentActionSchema,
   degradeAction,
@@ -25,7 +26,9 @@ import {
   AFTER_BOOKING_FAREWELL,
   CALL_OFFER_INTRO,
   decideEscalation,
+  ensureGreeting,
   looksLikeInventedSlots,
+  pickGreeting,
   nextProviderRetry,
   PROVIDER_DOWN_REPLY,
   stripSlotSentences,
@@ -109,6 +112,9 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   history.reverse();
   const lastInbound = [...history].reverse().find((m) => m.direction === "in");
   if (!lastInbound) return;
+  // Primer mensaje del agente: abre con uno de los saludos configurados.
+  const firstTurn = !history.some((m) => m.direction === "out");
+  const greeting = firstTurn ? pickGreeting(profile.greeting) : null;
 
   // Ventana cerrada: el agente JAMÁS envía texto libre → handoff 'ventana'.
   if (!conversation.isTest && !isWindowOpen(conversation.lastInboundAt)) {
@@ -158,6 +164,10 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     .from(schema.kbEntry)
     .where(eq(schema.kbEntry.organizationId, organizationId))
     .orderBy(asc(schema.kbEntry.createdAt));
+  const catalog = await listActiveItems(organizationId).catch((err) => {
+    console.warn(`[agente] no pude leer el catálogo: ${err}`);
+    return [];
+  });
   const stages = await db
     .select({ id: schema.pipelineStage.id, name: schema.pipelineStage.name })
     .from(schema.pipelineStage)
@@ -196,6 +206,9 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
         now,
         modalities,
         address,
+        firstTurn,
+        greeting,
+        catalog,
       }),
     },
     ...history
@@ -241,7 +254,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   }
   clearRetry(conversationId);
 
-  let action: AgentActionType = result.data;
+  let action: AgentActionType = withGreeting(result.data, greeting);
 
   // Política de cierre: el modelo quiere escalar, pero con `cita` eso se
   // convierte en ofrecer una llamada, salvo que ya haya cita o el motivo sea
@@ -309,6 +322,40 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
         return;
       } catch (err) {
         console.error(`[agente] el motor de agenda falló: ${err}`);
+        action = degradeAction(action);
+      }
+    }
+  }
+
+  // T5.1 — Enviar un archivo del catálogo. Se valida que sea de la org y esté
+  // activo; si no, se degrada a texto. El sandbox del Laboratorio no manda
+  // nada: registra "[archivo: título]" en la conversación de prueba.
+  if (action.action === "send_product") {
+    const item = await getSendableItem(organizationId, action.itemId);
+    if (!item) {
+      console.warn(`[agente] send_product con id inválido: ${action.itemId}`);
+      action = degradeAction(action);
+    } else {
+      try {
+        if (conversation.isTest) {
+          await persistTestOutbound(
+            conversation,
+            `[archivo: ${item.title}]${action.caption ? ` ${action.caption}` : ""}`
+          );
+        } else {
+          const data = await readItemFile(item);
+          await sendMediaMessage({
+            conversationId,
+            organizationId,
+            file: { data, mimeType: item.mimeType, fileName: item.fileName },
+            caption: action.caption,
+            aiGenerated: true,
+          });
+        }
+        if (action.reply) await deliverReply(conversation, action.reply);
+        return;
+      } catch (err) {
+        console.error(`[agente] no pude enviar el archivo ${item.id}: ${err}`);
         action = degradeAction(action);
       }
     }
@@ -418,6 +465,29 @@ async function persistTestOutbound(
     .update(schema.conversation)
     .set({ lastMessageAt: new Date(), updatedAt: new Date() })
     .where(eq(schema.conversation.id, conversation.id));
+}
+
+/** Antepone el saludo del primer mensaje a lo que vaya a decir el agente. */
+function withGreeting(
+  action: AgentActionType,
+  greeting: string | null
+): AgentActionType {
+  if (!greeting) return action;
+  switch (action.action) {
+    case "reply":
+      return { ...action, text: ensureGreeting(action.text, greeting) };
+    case "offer_slots":
+    case "book_slot":
+    case "update_lead":
+    case "move_stage":
+      return { ...action, reply: ensureGreeting(action.reply ?? "", greeting) };
+    case "send_product":
+      return { ...action, caption: ensureGreeting(action.caption ?? "", greeting) };
+    case "handoff":
+      return { ...action, farewell: ensureGreeting(action.farewell ?? "", greeting) };
+    default:
+      return action;
+  }
 }
 
 /** Reintentos del turno por caída del proveedor, por conversación. */

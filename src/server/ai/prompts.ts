@@ -1,4 +1,9 @@
 import type { schema } from "@/lib/db";
+import {
+  renderCatalog,
+  renderCatalogContent,
+  type CatalogForPrompt,
+} from "@/server/catalog/prompt";
 
 type AgentProfile = typeof schema.agentProfile.$inferSelect;
 type KbEntry = typeof schema.kbEntry.$inferSelect;
@@ -92,6 +97,12 @@ export function buildAgentSystemPrompt(input: {
   modalities?: ("presencial" | "llamada" | "videollamada")[];
   /** Dirección del local, para que el modelo la mencione al ofrecer presencial. */
   address?: string | null;
+  /** ¿Es el primer mensaje del agente en esta conversación? */
+  firstTurn?: boolean;
+  /** El saludo elegido al azar para este primer mensaje (ver policy.ts). */
+  greeting?: string | null;
+  /** T5.1 — archivos activos del catálogo. */
+  catalog?: CatalogForPrompt[];
 }): string {
   const { profile } = input;
   const stageNames = input.stages.map((s) => s.name).join(" | ");
@@ -127,8 +138,16 @@ export function buildAgentSystemPrompt(input: {
     profile.escalationRules
       ? `Reglas de escalado a humano:\n${profile.escalationRules}`
       : null,
-    profile.greeting ? `Saludo sugerido para conversaciones nuevas: ${profile.greeting}` : null,
+    input.firstTurn && input.greeting
+      ? [
+          `PRIMER MENSAJE de esta conversación. Empieza EXACTAMENTE con: «${input.greeting}»`,
+          "Después del saludo: si el cliente ya pidió o preguntó algo concreto, atiéndelo directo; si solo saludó o fue vago, pregúntale qué necesita, variando la forma (p. ej. «Sí, dígame, ¿en qué podemos ayudarle?», «Cuénteme, ¿qué necesita?», «¿En qué le puedo ayudar?»).",
+          "No mandes catálogo ni lista de servicios sin que lo pidan.",
+        ].join("\n")
+      : "Ya te presentaste antes en esta conversación: NO vuelvas a saludar ni a decir tu nombre.",
     `CONOCIMIENTO DEL NEGOCIO (tu única fuente de verdad; si algo no está aquí, NO lo inventes — di que lo confirmarás con el equipo o escala):\n${renderKb(input.kb)}`,
+    renderCatalogContent(input.catalog ?? []),
+    renderCatalog(input.catalog ?? []),
     `Etapas del pipeline disponibles: ${stageNames}`,
     input.now ? `Fecha y hora actual: ${input.now}` : null,
     offerBlock,
@@ -139,6 +158,11 @@ export function buildAgentSystemPrompt(input: {
       '- {"action":"update_lead","note":"...","reply":"..."} — guardar una nota del lead (reply opcional).',
       '- {"action":"move_stage","stage":"<nombre exacto de etapa>","reply":"..."} — mover el lead (reply opcional).',
       '- {"action":"handoff","reason":"...","farewell":"..."} — escalar a un humano (farewell opcional para despedirte).',
+      ...(input.catalog?.length
+        ? [
+            '- {"action":"send_product","itemId":"<id del CATÁLOGO>","caption":"...","reply":"..."} — enviar un archivo del catálogo (caption va con el archivo; reply, opcional, es un mensaje aparte después).',
+          ]
+        : []),
       ...agendaLines,
       "Reglas duras:",
       cita

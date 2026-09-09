@@ -23,6 +23,16 @@ const baseActions = [
     reason: z.string().optional(),
     farewell: z.string().optional(),
   }),
+  // T5.1 — mandar un archivo del catálogo (PDF/imagen). El id se valida
+  // contra la org y `active`; lo que no valide se degrada a reply.
+  z.object({
+    action: z.literal("send_product"),
+    itemId: z.string().min(1),
+    /** Pie de foto / texto que acompaña al archivo. */
+    caption: z.string().optional(),
+    /** Texto aparte, después del archivo (opcional). */
+    reply: z.string().optional(),
+  }),
 ] as const;
 
 /**
@@ -80,6 +90,10 @@ export function resolveStage(
 
 /** Degrada una acción que no se pudo ejecutar (FR-021 / contrato ai.md). */
 export function degradeAction(action: AgentActionType): AgentActionType {
+  if (action.action === "send_product") {
+    const text = action.reply ?? action.caption;
+    return text ? { action: "reply", text } : { action: "none" };
+  }
   if (
     action.action === "move_stage" ||
     action.action === "offer_slots" ||

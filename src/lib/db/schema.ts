@@ -1051,6 +1051,39 @@ export const capiSettings = pgTable(
 export * from "./schema/ai";
 
 /**
+ * T5.1 — Catálogo del agente: archivos (PDF, imágenes) con título, descripción
+ * y precio que el bot puede ENVIAR por WhatsApp (`send_product`). El texto de
+ * los PDF se extrae al subir y entra al conocimiento: así el bot responde
+ * precios sin que nadie los transcriba a mano. El binario vive en MEDIA_DIR.
+ */
+export const catalogItem = pgTable(
+  "catalog_item",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    /** Texto libre: "S/ 80 el millar". El bot lo cita tal cual. */
+    price: text("price"),
+    kind: text("kind", { enum: ["pdf", "image"] }).notNull(),
+    mimeType: text("mime_type").notNull(),
+    fileName: text("file_name").notNull(),
+    fileSize: integer("file_size").notNull(),
+    /** Ruta relativa dentro de MEDIA_DIR. */
+    storagePath: text("storage_path").notNull(),
+    /** Texto extraído del PDF (vacío en imágenes). Va al prompt con presupuesto. */
+    extractedText: text("extracted_text"),
+    active: boolean("active").notNull().default(true),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("catalog_item_org_idx").on(t.organizationId, t.position)]
+);
+
+/**
  * T1.2 — La cola persistente. Un turno programado sobrevive a un redeploy.
  * `conversation_id` va desnormalizado del payload para el índice único
  * parcial: una conversación tiene como mucho UN trabajo de cada tipo en cola.

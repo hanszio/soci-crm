@@ -90,3 +90,49 @@ export function stripSlotSentences(text: string): string {
   const kept = parts.filter((p) => p.trim() && !SLOT_LINE.test(p));
   return kept.join(" ").replace(/\s+/g, " ").trim();
 }
+
+/**
+ * Saludos iniciales: el campo `greeting` admite VARIAS líneas y en cada
+ * conversación nueva se usa una al azar. Así el primer mensaje no es siempre
+ * idéntico — lo primero que delata a un bot.
+ */
+export function greetingVariants(raw: string | null | undefined): string[] {
+  return (raw ?? "")
+    .split(/\r?\n/)
+    .map((l) => l.trim().replace(/^[-•*]\s*/, ""))
+    .filter(Boolean);
+}
+
+export function pickGreeting(
+  raw: string | null | undefined,
+  rng: () => number = Math.random
+): string | null {
+  const all = greetingVariants(raw);
+  if (all.length === 0) return null;
+  return all[Math.min(all.length - 1, Math.floor(rng() * all.length))] ?? null;
+}
+
+function normalizeForCompare(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * El primer mensaje TIENE que abrir con el saludo elegido. Si el modelo lo
+ * omitió o lo reescribió, se antepone; si ya está (aunque cambie puntuación
+ * o tildes), se deja tal cual.
+ */
+export function ensureGreeting(text: string, greeting: string | null): string {
+  if (!greeting) return text;
+  const g = normalizeForCompare(greeting);
+  const t = normalizeForCompare(text);
+  if (g && t.startsWith(g)) return text;
+  // Si el modelo puso su propio "Hola" al inicio, se reemplaza esa primera
+  // frase de saludo para no saludar dos veces.
+  const stripped = text.replace(/^\s*[¡!]?\s*(hola|buen[oa]s?(\s+d[ií]as|\s+tardes|\s+noches)?)[!.,:]*\s*/i, "");
+  return `${greeting}\n${stripped.trim()}`.trim();
+}

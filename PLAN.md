@@ -275,6 +275,12 @@ Disparador: prueba real del 2026-09-03 — el cliente eligió "mañana a las 10"
 
 Verificación: gate técnico verde (455 unit) y E2E `pnpm test:e2e` 137/137 contra la app con mocks (BD limpia en `docker` puerto 5433, `.env` local). Smoke vivo con wa-mock: "quiero hablar con un asesor" ⇒ `agent_job` done, sin handoff, oferta de llamada con horarios reales.
 
+**Adelantos hechos fuera de orden (2026-09-08, en `phase/1`, sin deploy a prod hasta el OK de Hans):**
+- T1.15 · guardarraíl contra horarios inventados por el modelo (reply con día+hora ⇒ oferta real). En prod como v0.3.1.
+- T1.16 · saludos iniciales con variantes (`greeting` multilínea, uno al azar; el pipeline lo antepone si el modelo lo omite; no vuelve a presentarse).
+- T5.1 · catálogo del agente: `catalog_item` + Ajustes → Agente → "Catálogo y archivos" (PDF/imagen con título, descripción, precio); texto del PDF extraído con `pdf-parse` al prompt (presupuesto 12k/5k); acción `send_product` (sandbox del Lab: registra, no envía); E2E con PDF real en `tests/fixtures/precios-e2e.pdf` (145/145). Migración 0017. Pendiente T5.2 (pantalla completa con orden y varias imágenes) y T5.3.
+- Herramientas locales: `pnpm dev:chat` (WhatsApp simulado en terminal) y flujo local + túnel `cloudflared` con el número de prueba de Meta.
+
 Pendiente de esta fase: aviso al dueño por WhatsApp (exige plantilla aprobada por Meta — Fase 6); horario de atención del agente (fuera de horario); reintentos de proveedor persistidos en la cola (hoy contador en memoria).
 
 ---
