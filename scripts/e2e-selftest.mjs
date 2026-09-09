@@ -978,6 +978,7 @@ async function main() {
   );
 
   await catalogChecks();
+  await platformChecks();
   await agendaChecks();
   await atribucionChecks();
 
@@ -1941,4 +1942,50 @@ async function catalogChecks() {
   await api("/api/agent/profile", { method: "PUT", body: JSON.stringify({ enabled: false }) });
   const del = await api(`/api/catalog/${itemId}`, { method: "DELETE" });
   ok("borrar el archivo del catálogo", del.res.ok, `status=${del.res.status}`);
+}
+
+
+/**
+ * T3.1 — Consola del propietario: el dueño de `principal` da de alta otra
+ * empresa con su propio dueño; ese dueño entra y ve SU organización, vacía.
+ */
+async function platformChecks() {
+  console.log("\n== T3.1: alta de empresas (consola del propietario) ==");
+  const list = await api("/api/platform/organizations");
+  ok("el propietario de principal ve la lista de empresas", list.res.ok && Array.isArray(list.json?.organizations), `status=${list.res.status}`);
+
+  const created = await api("/api/platform/organizations", {
+    method: "POST",
+    body: JSON.stringify({
+      name: "Empresa E2E & Cía",
+      ownerEmail: "dueno-e2e@vocero.test",
+      ownerPassword: "clave-e2e-12345",
+      ownerName: "Dueño E2E",
+    }),
+  });
+  ok("crear una empresa responde 201 con slug derivado del nombre", created.res.status === 201 && created.json?.organization?.slug === "empresa-e2e-cia", JSON.stringify(created.json));
+
+  const dup = await api("/api/platform/organizations", {
+    method: "POST",
+    body: JSON.stringify({ name: "Empresa E2E & Cía", ownerEmail: "otro@vocero.test", ownerPassword: "clave-e2e-12345", ownerName: "X" }),
+  });
+  ok("un slug repetido se rechaza (409)", dup.res.status === 409, `status=${dup.res.status}`);
+
+  // El dueño nuevo entra y ve su organización, no la de la agencia.
+  const login = await fetch(`${BASE}/api/auth/sign-in/email`, {
+    method: "POST",
+    // Better Auth exige Origin (CSRF); sin él responde 403.
+    headers: { "content-type": "application/json", origin: BASE },
+    body: JSON.stringify({ email: "dueno-e2e@vocero.test", password: "clave-e2e-12345" }),
+  });
+  const newCookie = (login.headers.getSetCookie?.() ?? []).map((c) => c.split(";")[0]).join("; ");
+  ok("el dueño nuevo puede iniciar sesión", login.ok, `status=${login.status}`);
+  const branding = await fetch(`${BASE}/api/settings/branding`, { headers: { cookie: newCookie } });
+  const brandingJson = await branding.json().catch(() => null);
+  ok("…y ve su propia empresa", brandingJson?.branding?.name === "Empresa E2E & Cía", JSON.stringify(brandingJson?.branding));
+  const consola = await fetch(`${BASE}/api/platform/organizations`, { headers: { cookie: newCookie } });
+  ok("…pero no la consola de la plataforma (404)", consola.status === 404, `status=${consola.status}`);
+  const convs = await fetch(`${BASE}/api/conversations`, { headers: { cookie: newCookie } });
+  const convsJson = await convs.json().catch(() => null);
+  ok("su bandeja está vacía: nada de la otra empresa se filtra", Array.isArray(convsJson?.conversations) && convsJson.conversations.length === 0, JSON.stringify(convsJson?.conversations?.length));
 }
