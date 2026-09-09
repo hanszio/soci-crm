@@ -92,6 +92,10 @@ export function buildAgentSystemPrompt(input: {
   modalities?: ("presencial" | "llamada" | "videollamada")[];
   /** Dirección del local, para que el modelo la mencione al ofrecer presencial. */
   address?: string | null;
+  /** ¿Es el primer mensaje del agente en esta conversación? */
+  firstTurn?: boolean;
+  /** El saludo elegido al azar para este primer mensaje (ver policy.ts). */
+  greeting?: string | null;
 }): string {
   const { profile } = input;
   const stageNames = input.stages.map((s) => s.name).join(" | ");
@@ -127,7 +131,13 @@ export function buildAgentSystemPrompt(input: {
     profile.escalationRules
       ? `Reglas de escalado a humano:\n${profile.escalationRules}`
       : null,
-    profile.greeting ? `Saludo sugerido para conversaciones nuevas: ${profile.greeting}` : null,
+    input.firstTurn && input.greeting
+      ? [
+          `PRIMER MENSAJE de esta conversación. Empieza EXACTAMENTE con: «${input.greeting}»`,
+          "Después del saludo: si el cliente ya pidió o preguntó algo concreto, atiéndelo directo; si solo saludó o fue vago, pregúntale qué necesita, variando la forma (p. ej. «Sí, dígame, ¿en qué podemos ayudarle?», «Cuénteme, ¿qué necesita?», «¿En qué le puedo ayudar?»).",
+          "No mandes catálogo ni lista de servicios sin que lo pidan.",
+        ].join("\n")
+      : "Ya te presentaste antes en esta conversación: NO vuelvas a saludar ni a decir tu nombre.",
     `CONOCIMIENTO DEL NEGOCIO (tu única fuente de verdad; si algo no está aquí, NO lo inventes — di que lo confirmarás con el equipo o escala):\n${renderKb(input.kb)}`,
     `Etapas del pipeline disponibles: ${stageNames}`,
     input.now ? `Fecha y hora actual: ${input.now}` : null,

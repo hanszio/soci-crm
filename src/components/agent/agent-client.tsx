@@ -225,10 +225,11 @@ function ProfileSection({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="agent-greeting">Saludo</Label>
-          <Input
+          <Label htmlFor="agent-greeting">Saludos iniciales</Label>
+          <Textarea
             id="agent-greeting"
-            placeholder="Saludo para conversaciones nuevas"
+            rows={3}
+            placeholder={"Uno por línea; en cada conversación nueva se usa uno al azar.\nHola, buen día, le habla David de Spark\nBuenas, habla David de Spark, ¿cómo le va?"}
             value={form.greeting ?? ""}
             onChange={(e) => setForm({ ...form, greeting: e.target.value })}
           />

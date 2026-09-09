@@ -141,3 +141,41 @@ describe("horarios inventados por el modelo", () => {
     expect(stripSlotSentences("Mañana martes a las 10:00 te espero.")).toBe("");
   });
 });
+
+describe("saludos iniciales", () => {
+  it("elige una variante al azar entre las líneas configuradas", async () => {
+    const { pickGreeting, greetingVariants } = await import("@/server/ai/policy");
+    const raw = "Hola!, buen día, le habla David de Spark\n- Buenas, habla David de Spark\n\n";
+    expect(greetingVariants(raw)).toHaveLength(2);
+    expect(pickGreeting(raw, () => 0)).toBe("Hola!, buen día, le habla David de Spark");
+    expect(pickGreeting(raw, () => 0.99)).toBe("Buenas, habla David de Spark");
+    expect(pickGreeting("", () => 0)).toBeNull();
+  });
+
+  it("si el modelo no abrió con el saludo, se antepone; si ya lo puso, no se duplica", async () => {
+    const { ensureGreeting } = await import("@/server/ai/policy");
+    const g = "Hola!, buen día, le habla David de Spark";
+    expect(ensureGreeting("Sí, dígame, ¿en qué podemos ayudarle?", g)).toBe(
+      `${g}\nSí, dígame, ¿en qué podemos ayudarle?`
+    );
+    expect(ensureGreeting("Hola, buen dia, le habla David de Spark. ¿Qué necesita?", g)).toBe(
+      "Hola, buen dia, le habla David de Spark. ¿Qué necesita?"
+    );
+    // Un "Hola!" propio del modelo se reemplaza para no saludar dos veces.
+    expect(ensureGreeting("¡Hola! ¿En qué le ayudo?", g)).toBe(`${g}\n¿En qué le ayudo?`);
+  });
+
+  it("el prompt exige el saludo solo en el primer mensaje", async () => {
+    const { buildAgentSystemPrompt } = await import("@/server/ai/prompts");
+    const profile = {
+      id: "agp_1", organizationId: "org_1", enabled: true, name: "David", tone: null,
+      instructions: null, escalationRules: null, greeting: "Hola, habla David",
+      escalationMode: "cita" as const, delayMinSec: 10, delayMaxSec: 300,
+      createdAt: new Date(), updatedAt: new Date(),
+    };
+    const first = buildAgentSystemPrompt({ profile, kb: [], stages: [], firstTurn: true, greeting: "Hola, habla David" });
+    expect(first).toContain("Empieza EXACTAMENTE con: «Hola, habla David»");
+    const later = buildAgentSystemPrompt({ profile, kb: [], stages: [], firstTurn: false });
+    expect(later).toContain("NO vuelvas a saludar");
+  });
+});
