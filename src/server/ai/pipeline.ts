@@ -7,7 +7,8 @@ import { chatJson, type ChatMessage } from "@/lib/ai";
 import { enqueue } from "@/server/jobs/queue";
 import { publish } from "@/server/events/bus";
 import { isWindowOpen } from "@/server/inbox/window";
-import { SendError, sendText } from "@/server/inbox/send";
+import { SendError, sendMediaMessage, sendText } from "@/server/inbox/send";
+import { getSendableItem, listActiveItems, readItemFile } from "@/server/catalog/items";
 import {
   agentActionSchema,
   degradeAction,
@@ -163,6 +164,10 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     .from(schema.kbEntry)
     .where(eq(schema.kbEntry.organizationId, organizationId))
     .orderBy(asc(schema.kbEntry.createdAt));
+  const catalog = await listActiveItems(organizationId).catch((err) => {
+    console.warn(`[agente] no pude leer el catálogo: ${err}`);
+    return [];
+  });
   const stages = await db
     .select({ id: schema.pipelineStage.id, name: schema.pipelineStage.name })
     .from(schema.pipelineStage)
@@ -203,6 +208,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
         address,
         firstTurn,
         greeting,
+        catalog,
       }),
     },
     ...history
@@ -316,6 +322,40 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
         return;
       } catch (err) {
         console.error(`[agente] el motor de agenda falló: ${err}`);
+        action = degradeAction(action);
+      }
+    }
+  }
+
+  // T5.1 — Enviar un archivo del catálogo. Se valida que sea de la org y esté
+  // activo; si no, se degrada a texto. El sandbox del Laboratorio no manda
+  // nada: registra "[archivo: título]" en la conversación de prueba.
+  if (action.action === "send_product") {
+    const item = await getSendableItem(organizationId, action.itemId);
+    if (!item) {
+      console.warn(`[agente] send_product con id inválido: ${action.itemId}`);
+      action = degradeAction(action);
+    } else {
+      try {
+        if (conversation.isTest) {
+          await persistTestOutbound(
+            conversation,
+            `[archivo: ${item.title}]${action.caption ? ` ${action.caption}` : ""}`
+          );
+        } else {
+          const data = await readItemFile(item);
+          await sendMediaMessage({
+            conversationId,
+            organizationId,
+            file: { data, mimeType: item.mimeType, fileName: item.fileName },
+            caption: action.caption,
+            aiGenerated: true,
+          });
+        }
+        if (action.reply) await deliverReply(conversation, action.reply);
+        return;
+      } catch (err) {
+        console.error(`[agente] no pude enviar el archivo ${item.id}: ${err}`);
         action = degradeAction(action);
       }
     }
@@ -441,6 +481,8 @@ function withGreeting(
     case "update_lead":
     case "move_stage":
       return { ...action, reply: ensureGreeting(action.reply ?? "", greeting) };
+    case "send_product":
+      return { ...action, caption: ensureGreeting(action.caption ?? "", greeting) };
     case "handoff":
       return { ...action, farewell: ensureGreeting(action.farewell ?? "", greeting) };
     default:

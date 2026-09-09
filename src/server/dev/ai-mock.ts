@@ -45,6 +45,19 @@ export function aiMockCompletion(messages: InMessage[]): string {
 
   const text = lastUser.toLowerCase();
 
+  // T5.1 — Pide precios/catálogo y el sistema listó archivos → se manda el
+  // primero. El id sale del prompt real: el mock no inventa ids.
+  if (/precio|cat[aá]logo|lista|foto|pdf|brochure/.test(text)) {
+    const m = system.match(/CATÁLOGO[\s\S]*?id="([^"]+)"/);
+    if (m) {
+      return JSON.stringify({
+        action: "send_product",
+        itemId: m[1],
+        caption: "Aquí tiene la información.",
+      });
+    }
+  }
+
   // Persona pide_humano (el regex de respaldo captura la frase canónica; esta
   // rama cubre variantes que llegan al modelo).
   if (text.includes("humano") || text.includes("asesor")) {

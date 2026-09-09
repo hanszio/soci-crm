@@ -34,6 +34,8 @@ const prefixes = {
   usageEvent: "use",
   // T1.2 — cola persistente
   agentJob: "ajb",
+  // T5.1 — catálogo del agente
+  catalogItem: "cat",
 } as const;
 
 export type IdKind = keyof typeof prefixes;
