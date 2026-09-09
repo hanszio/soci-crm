@@ -320,6 +320,8 @@ export async function sendMediaMessage(input: {
   organizationId: string;
   file: { data: Buffer; mimeType: string; fileName?: string };
   caption?: string;
+  /** true cuando lo manda el agente (T5.1): la bandeja lo marca como IA. */
+  aiGenerated?: boolean;
 }): Promise<SendResult> {
   // Validación previa (FR-007): tipo y tamaño antes de tocar disco o red.
   const kind = validateOutgoing(input.file.mimeType, input.file.data.byteLength);
@@ -383,7 +385,8 @@ export async function sendMediaMessage(input: {
       type: kind,
       text: null,
       status: "pending",
-      origin: "operator",
+      aiGenerated: input.aiGenerated,
+      origin: input.aiGenerated ? "ai" : "operator",
       mediaAssetId: assetId,
       media: asset,
     });
@@ -414,7 +417,8 @@ export async function sendMediaMessage(input: {
       text: null,
       status: "failed",
       error: sendErr.message,
-      origin: "operator",
+      aiGenerated: input.aiGenerated,
+      origin: input.aiGenerated ? "ai" : "operator",
       mediaAssetId: assetId,
       media: asset,
     });

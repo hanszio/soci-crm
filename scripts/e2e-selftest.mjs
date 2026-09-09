@@ -12,6 +12,8 @@
  * a declarar "Hecho").
  */
 
+import { readFileSync } from "node:fs";
+
 const BASE = process.env.APP_BASE_URL ?? "http://localhost:3000";
 const BOT_KEY = process.env.BOT_API_KEY;
 
@@ -975,6 +977,7 @@ async function main() {
     JSON.stringify(echoImg?.media)
   );
 
+  await catalogChecks();
   await agendaChecks();
   await atribucionChecks();
 
@@ -1859,4 +1862,83 @@ async function atribucionChecks() {
     act7.length >= 3,
     `${act7.length} filas`
   );
+}
+
+
+/**
+ * T5.1 — Catálogo del agente (PDF/imagen que el bot manda por WhatsApp).
+ * El PDF es mínimo pero válido; lo que se afirma es el camino completo:
+ * subir → el prompt lo lista → el modelo (mock) pide send_product → el
+ * wa-mock recibe un documento.
+ */
+async function catalogChecks() {
+  console.log("\n== T5.1: catálogo del agente ==");
+  // Un PDF real (generado con CUPS): pdf.js exige una tabla xref correcta y
+  // un PDF armado a mano no la pasa.
+  const pdf = readFileSync(new URL("../tests/fixtures/precios-e2e.pdf", import.meta.url));
+  const form = new FormData();
+  form.set("file", new Blob([pdf], { type: "application/pdf" }), "precios.pdf");
+  form.set("title", "Lista de precios E2E");
+  form.set("description", "cuando pidan precios");
+  form.set("price", "desde S/ 80");
+  const up = await fetch(`${BASE}/api/catalog`, { method: "POST", headers: { cookie }, body: form });
+  const upJson = await up.json().catch(() => null);
+  ok("subir un PDF al catálogo responde 201", up.status === 201, `status=${up.status} ${JSON.stringify(upJson)}`);
+  const itemId = upJson?.item?.id;
+  ok(
+    "el texto del PDF se extrajo al subirlo",
+    upJson?.item?.hasText === true && upJson?.item?.textChars > 0,
+    JSON.stringify(upJson?.item)
+  );
+
+  const lista = (await api("/api/catalog")).json?.items ?? [];
+  ok("el archivo aparece en el catálogo", lista.some((i) => i.id === itemId));
+
+  const download = await fetch(`${BASE}/api/catalog/${itemId}/file`, { headers: { cookie } });
+  ok(
+    "el operador puede descargarlo",
+    download.ok && (download.headers.get("content-type") ?? "").includes("pdf"),
+    `status=${download.status}`
+  );
+
+  // El agente manda el archivo cuando piden precios.
+  await api("/api/agent/profile", { method: "PUT", body: JSON.stringify({ enabled: true }) });
+  await fetch(`${BASE}/api/dev/wa-mock/outbox`, { method: "DELETE" });
+  const LEAD = "5214627051001";
+  await api("/api/dev/wa-mock/inbound", {
+    method: "POST",
+    body: JSON.stringify({
+      phoneNumberId: PN,
+      from: LEAD,
+      name: "Lead catálogo",
+      text: "hola, me pasas la lista de precios?",
+      waMessageId: "wamid.e2e.t51.1",
+    }),
+  });
+  let docEntry = null;
+  for (let i = 0; i < 20 && !docEntry; i++) {
+    await sleep(500);
+    const outbox = (await (await fetch(`${BASE}/api/dev/wa-mock/outbox`)).json()).outbox ?? [];
+    // El CRM normaliza 521→52 al responder: se compara por sufijo.
+    docEntry = outbox.find((e) => String(e.to).endsWith("4627051001") && e.type === "document") ?? null;
+  }
+  ok("el agente mandó el PDF por WhatsApp (wa-mock recibió un documento)", Boolean(docEntry), JSON.stringify(docEntry));
+  ok(
+    "el documento lleva su nombre de archivo y el pie de foto",
+    Boolean(docEntry?.body?.document?.filename) && Boolean(docEntry?.body?.document?.caption),
+    JSON.stringify(docEntry?.body)
+  );
+
+  const convs = (await api("/api/conversations")).json?.conversations ?? [];
+  const conv = convs.find((c) => c.contact.phone === "524627051001");
+  const msgs = conv ? ((await api(`/api/conversations/${conv.id}/messages`)).json?.messages ?? []) : [];
+  ok(
+    "en la bandeja el archivo queda marcado como enviado por la IA",
+    msgs.some((m) => m.direction === "out" && m.type === "document" && m.origin === "ai"),
+    JSON.stringify(msgs.map((m) => [m.direction, m.type, m.origin]))
+  );
+
+  await api("/api/agent/profile", { method: "PUT", body: JSON.stringify({ enabled: false }) });
+  const del = await api(`/api/catalog/${itemId}`, { method: "DELETE" });
+  ok("borrar el archivo del catálogo", del.res.ok, `status=${del.res.status}`);
 }

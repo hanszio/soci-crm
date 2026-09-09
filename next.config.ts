@@ -12,7 +12,8 @@ const nextConfig: NextConfig = {
   // symlinks que requieren permisos elevados, así que ahí se omite.
   output: process.platform === "win32" ? undefined : "standalone",
   // El paquete `postgres` usa APIs de Node que no deben empaquetarse en el bundle.
-  serverExternalPackages: ["postgres"],
+  // pdf-parse (T5.1) trae pdf.js con requires dinámicos: mejor sin empaquetar.
+  serverExternalPackages: ["postgres", "pdf-parse"],
   // Se congelan al construir: el binario lleva dentro de qué código salió, así
   // que no puede mentir en tiempo de ejecución. `SOURCE_COMMIT` lo inyecta
   // Coolify solo; con docker compose se pasa por `--build-arg` y si falta, la
