@@ -285,6 +285,8 @@ Pendiente de esta fase: aviso al dueño por WhatsApp (exige plantilla aprobada p
 
 ---
 
+> **2026-10-02** — Plan nuevo en `specs/018-jev-perfil-negocio/plan.md`: Jev (TypeSafe) como decisor del turno en tres carriles + Perfil de negocio obligatorio (plantilla, compilador, onboarding) + banco de respuestas con variantes. Absorbe T2.1 (gate) y T3.5 (onboarding).
+
 ## Fase 2 — Seguridad del agente (3 días)
 
 Contratos: `src/server/ai/guard.ts` expone `sanitizeInbound(text): string`, `classifyTurn(input): Promise<{intent, onTopic, injectionRisk}>`; `src/server/ai/output-guard.ts` expone `checkOutbound(text, ctx): {ok, reason?, text}`. Solo **T2.1** toca `pipeline.ts` y `prompts.ts`; los demás entregan funciones puras + tests y T2.1 (o QA) las cablea.
