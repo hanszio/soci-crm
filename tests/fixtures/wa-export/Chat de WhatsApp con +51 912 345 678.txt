@@ -1,0 +1,13 @@
+12/09/2026, 16:40 - +51 912 345 678: hola
+12/09/2026, 16:41 - Estudio Contable Andes: Hola, buenas tardes. Carmen del Estudio Contable Andes, ¿en qué le puedo ayudar?
+12/09/2026, 16:42 - +51 912 345 678: ustedes hacen planillas?
+12/09/2026, 16:44 - Estudio Contable Andes: Sí, vemos planillas completas: boletas de pago, PLAME, EsSalud y AFP.
+Trabajamos desde 1 trabajador.
+12/09/2026, 16:45 - +51 912 345 678: donde queda su oficina
+12/09/2026, 16:46 - Estudio Contable Andes: Estamos en Av. El Sol 456, oficina 302, Cusco. Atendemos de lunes a viernes de 9 a 6.
+12/09/2026, 16:47 - +51 912 345 678: ok gracias
+12/09/2026, 16:47 - Estudio Contable Andes: Con gusto, aquí estamos para lo que necesite
+12/09/2026, 16:50 - +51 912 345 678: aceptan yape?
+12/09/2026, 16:51 - Estudio Contable Andes: Sí, aceptamos Yape, Plin y transferencia.
+12/09/2026, 16:52 - +51 912 345 678: ya, hasta luego
+12/09/2026, 16:52 - Estudio Contable Andes: Hasta luego, que le vaya bien
