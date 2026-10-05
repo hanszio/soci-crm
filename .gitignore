@@ -44,3 +44,4 @@ Thumbs.db
 scratch/
 .herdr-*.ws
 .env.deploy
+.tmp-jev-eval.mjs

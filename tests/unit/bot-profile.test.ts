@@ -43,7 +43,7 @@ function profileRow(overrides: Partial<AgentProfile> = {}): AgentProfile {
     greeting: "¡Hola! Soy Sofi 🦷",
     escalationMode: "cita",
     delayMinSec: 10,
-    delayMaxSec: 300,
+    delayMaxSec: 300, jevMode: "off" as const,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,

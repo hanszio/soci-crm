@@ -36,6 +36,9 @@ const prefixes = {
   agentJob: "ajb",
   // T5.1 — catálogo del agente
   catalogItem: "cat",
+  // 018 — Jev y banco de respuestas
+  replyVariant: "rv",
+  turnDecision: "td",
 } as const;
 
 export type IdKind = keyof typeof prefixes;

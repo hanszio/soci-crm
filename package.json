@@ -18,6 +18,7 @@
     "test": "vitest run",
     "test:e2e": "node --env-file=.env scripts/e2e-selftest.mjs",
     "dev:chat": "node scripts/dev-chat.mjs",
+    "jev:eval": "esbuild scripts/jev-eval.ts --bundle --platform=node --format=esm --outfile=.tmp-jev-eval.mjs --alias:@=./src --packages=external --log-level=warning && node --env-file=.env .tmp-jev-eval.mjs",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",

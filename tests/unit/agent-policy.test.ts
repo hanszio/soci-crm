@@ -67,7 +67,7 @@ describe("el prompt según la política", () => {
     greeting: null,
     escalationMode: "cita" as const,
   delayMinSec: 10,
-  delayMaxSec: 300,
+  delayMaxSec: 300, jevMode: "off" as const,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -170,7 +170,7 @@ describe("saludos iniciales", () => {
     const profile = {
       id: "agp_1", organizationId: "org_1", enabled: true, name: "David", tone: null,
       instructions: null, escalationRules: null, greeting: "Hola, habla David",
-      escalationMode: "cita" as const, delayMinSec: 10, delayMaxSec: 300,
+      escalationMode: "cita" as const, delayMinSec: 10, delayMaxSec: 300, jevMode: "off" as const,
       createdAt: new Date(), updatedAt: new Date(),
     };
     const first = buildAgentSystemPrompt({ profile, kb: [], stages: [], firstTurn: true, greeting: "Hola, habla David" });
