@@ -16,7 +16,7 @@
     "tone": "profesional, claro y cercano; de usted; sin emojis; frases cortas; sin tecnicismos innecesarios",
     "greeting": [
       "Hola, buen día. Le saluda Lucía del estudio contable",
-      "Buen día, habla Lucía, del estudio contable. ¿Cómo está?",
+      "Buen día, habla Lucía, del estudio contable",
       "Hola, qué tal. Soy Lucía, del estudio contable",
       "Buenas, le atiende Lucía del estudio contable",
       "Hola, buen día. Lucía, del estudio contable, a sus órdenes"
@@ -51,7 +51,7 @@
       "Cuénteme, ¿qué necesita?",
       "¿En qué le ayudamos?",
       "Claro, ¿qué consulta tiene?",
-      "Con gusto. ¿Qué necesita resolver?"
+      "¿Qué necesita resolver?"
     ],
     "ack": [
       "Con gusto.",

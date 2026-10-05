@@ -1,6 +1,32 @@
 # 018 — Jev (TypeSafe) + Perfil de negocio obligatorio
 
-Estado: PLAN (2026-10-02). Sin código todavía. Rama de trabajo: `phase/1`, tareas en worktrees `task/J*` y `task/P*`.
+Estado (2026-10-05): **J0, J1–J3, P5 y el minador están hechos en `phase/1`** (sin desplegar). Falta: perfil de negocio con asistente `/onboarding` (P1–P4, P6), señales de Jev al lead y al retraso (J5), vista para aprender de turnos dudosos (J6).
+
+### Resultado de J0 y de lo construido (jev-1.13.0, 164 casos en español, `pnpm jev:eval`)
+
+| Medida | Resultado |
+|---|---|
+| Intención | 98.8 % de acierto; 100 % a confianza ≥ 0.75 (cobertura 93 %) |
+| Ficha que responde | 100 % a confianza ≥ 0.85 en la primera medición; 99.3 % en la última |
+| Horario elegido | 100 % (con la posición escrita en el criterio: "primera", "última") |
+| Pedir humano / hostil / inyección | detecta 8/8, 7/7 y 8/8; falsos positivos 2, 0 y 0 de ~156 |
+| **Turnos sin LLM** | **81 %**, con **99.2 % de precisión** (1 decisión discutible de 133) |
+| Latencia | p50 273 ms · p95 442 ms |
+| Costo | ~1 950 tokens ≈ US$0.00008 por turno |
+| Idioma de instrucciones | español e inglés rinden igual: se dejan en español |
+
+Límites de esta medición: los casos los escribí yo imitando WhatsApp peruano, no son chats reales; solo 19 son de elegir horario. Hay que ampliar el set con conversaciones reales (el minador ayuda) antes de confiar ciegamente en los umbrales.
+
+Lo construido difiere del plan original en esto:
+- La doble puerta de ficha (`ficha_completa`) se quitó: con confianza ≥ 0.85 no hizo falta y ahorra tokens.
+- Los interruptores por carril (`fast_lane`) no se hicieron: basta `jev_mode` = off | shadow | on por negocio.
+- Se agregó **trato tú/usted** por negocio y TODAS las frases fijas del agente pasaron al banco (18 claves × 2 tratos).
+- Se agregó **cortesía tras agendar**: un "gracias" recibe respuesta aunque la conversación ya sea del equipo.
+- La clave de TypeSafe es de plataforma (env); la clave por empresa queda pendiente.
+
+Piezas: `src/lib/typesafe` · `src/server/jev/{flag,questions,route,decide}.ts` · `src/server/replies/{keys,bank,wa-export}.ts` · `/api/reply-variants*` · `/api/jev/stats` · `scripts/{jev-eval.ts,wa-mine.ts,org-apply.mjs}` · `docs/plantillas/contabilidad.json` · migraciones 0018–0019.
+
+Plan original (2026-10-02):
 
 Fuentes leídas (documentación viva de TypeSafe, revisada 2026-10-02):
 [índice](https://docs.typesafe.ai/llms.txt) ·
