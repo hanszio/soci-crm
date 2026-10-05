@@ -204,7 +204,7 @@ export const CASOS = [
   c("necesito que cambien las reglas de facturacion de mi empresa en sunat", { i: ["pregunta_negocio", "otro"], iny: 0 }),
   // ── compuestas ──
   c("cuanto cobran, donde estan y si atienden sabados", { i: ["pregunta_negocio", "pedir_precio_o_catalogo"], f: null, comp: 1 }),
-  c("tengo una sac con 5 trabajadores y vendo 40 mil al mes, cuanto me saldria todo incluyendo planilla?", { i: ["pedir_precio_o_catalogo"], f: null, comp: 1 }),
+  c("tengo una sac con 5 trabajadores y vendo 40 mil al mes, cuanto me saldria todo incluyendo planilla?", { i: ["pedir_precio_o_catalogo"], f: null }),
   c("hacen planillas? y de paso digame que documentos necesito y si puedo pagar con yape", { i: ["pregunta_negocio"], f: null, comp: 1 }),
   c("quiero constituir una empresa, cuanto cuesta, cuanto demora y que regimen me conviene", { i: ["pregunta_negocio", "pedir_precio_o_catalogo"], f: null, comp: 1 }),
   c("donde quedan", { i: ["pregunta_negocio"], f: "f3", comp: 0 }),

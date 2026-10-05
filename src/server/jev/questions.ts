@@ -114,7 +114,7 @@ export function buildJevRequest(ctx: JevContext): {
     compuesta: {
       type: "noul",
       instructions:
-        "¿El `ultimo_mensaje` contiene más de una pregunta distinta, o pide un cálculo o cotización a la medida de su caso?",
+        "¿El `ultimo_mensaje` contiene dos o más preguntas distintas sobre temas diferentes?",
     },
   };
 

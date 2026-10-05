@@ -196,8 +196,11 @@ describe("banco de respuestas", () => {
     expect(chooseVariant([], [], () => 0)).toBeNull();
   });
 
-  it("toda clave tiene al menos 3 variantes de fábrica y las ranuras se resuelven", () => {
-    for (const key of REPLY_KEYS) expect(DEFAULT_VARIANTS[key].length).toBeGreaterThanOrEqual(3);
+  it("toda clave tiene variantes de fábrica (las de conversación, 3 o más) y las ranuras se resuelven", () => {
+    for (const key of REPLY_KEYS) expect(DEFAULT_VARIANTS[key].length).toBeGreaterThanOrEqual(2);
+    for (const key of ["abrir", "ack", "despedida", "fuera_de_tema"] as const) {
+      expect(DEFAULT_VARIANTS[key].length).toBeGreaterThanOrEqual(3);
+    }
     expect(renderVariant("Temas de {negocio}. Soy {agente}.", { negocio: "Spark", agente: "David" })).toBe(
       "Temas de Spark. Soy David."
     );
@@ -221,5 +224,40 @@ describe("typesafe-mock", () => {
       type: "bank",
       key: "abrir",
     });
+  });
+});
+
+describe("trato y frases del sistema", () => {
+  it("cada clave tiene variantes en usted y en tú, y ninguna mezcla el trato", async () => {
+    const { defaultVariants } = await import("@/server/replies/keys");
+    const usted = defaultVariants("usted");
+    const tu = defaultVariants("tu");
+    for (const key of REPLY_KEYS) {
+      expect(usted[key].length, key).toBeGreaterThanOrEqual(2);
+      expect(tu[key].length, key).toBeGreaterThanOrEqual(2);
+      for (const t of usted[key]) expect(t, `${key}: ${t}`).not.toMatch(/\b(te|ti|tu|tus|dime|mira|necesitas|quieres|escribes)\b/i);
+      for (const t of tu[key]) expect(t, `${key}: ${t}`).not.toMatch(/\b(le|usted|dígame|cuénteme|necesita|disculpe)\b/i);
+    }
+  });
+
+  it("makeSay: las variantes del negocio ganan, las ranuras se llenan y un mismo turno no se repite", async () => {
+    const { makeSay } = await import("@/server/replies/bank");
+    const say = makeSay({ ack: ["Ya, con gusto.", "Para servirle."] }, "usted", [], { negocio: "Spark" }, () => 0);
+    const a = say("ack");
+    const b = say("ack");
+    expect([a, b].sort()).toEqual(["Para servirle.", "Ya, con gusto."]);
+    expect(say("cita_confirmada", { horario: "mar 6 oct, 10:00" })).toContain("mar 6 oct, 10:00");
+    expect(say("fuera_de_tema")).toContain("Spark");
+    const tu = makeSay({}, "tu", [], {}, () => 0);
+    expect(tu("cita_llamada")).toBe("Te llamamos a este mismo número.");
+  });
+
+  it("tras agendar solo se permite la cortesía", async () => {
+    const { isCourtesyPlan } = await import("@/server/jev/route");
+    expect(isCourtesyPlan({ type: "bank", key: "ack" })).toBe(true);
+    expect(isCourtesyPlan({ type: "bank", key: "despedida" })).toBe(true);
+    expect(isCourtesyPlan({ type: "bank", key: "abrir" })).toBe(false);
+    expect(isCourtesyPlan({ type: "ficha", fichaId: "kb_1" })).toBe(false);
+    expect(isCourtesyPlan({ type: "llm", reason: "x" })).toBe(false);
   });
 });

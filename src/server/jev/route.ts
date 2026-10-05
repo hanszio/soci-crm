@@ -36,6 +36,14 @@ export type Plan =
   | { type: "handoff"; reason: string }
   | { type: "llm"; reason: string };
 
+/**
+ * Tras agendar, la conversación es del equipo — pero dejar un "gracias" sin
+ * respuesta se ve mal. Solo estas respuestas se permiten entonces.
+ */
+export function isCourtesyPlan(plan: Plan): boolean {
+  return plan.type === "bank" && (plan.key === "ack" || plan.key === "despedida");
+}
+
 export type RouteContext = {
   agenda: boolean;
   /** El último mensaje del asistente terminó en pregunta: un "ok" es una respuesta, no un acuse. */

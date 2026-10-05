@@ -20,9 +20,6 @@ export type EscalationDecision =
   /** Proponer una llamada agendada con un asesor. */
   | { kind: "offer_call" };
 
-export const CALL_OFFER_INTRO =
-  "Claro, te agendo una llamada con un asesor. ¿Qué horario te acomoda?";
-
 /** Motivos que sí ameritan pausar aunque la política sea `cita`. */
 const ALWAYS_HANDOFF = /cancel|hostil|insult|agresi|amenaz|reclam/i;
 
@@ -50,14 +47,6 @@ export const PROVIDER_RETRY_DELAYS_MS = [30_000, 120_000, 300_000] as const;
 export function nextProviderRetry(attempt: number): number | null {
   return PROVIDER_RETRY_DELAYS_MS[attempt] ?? null;
 }
-
-/** Lo que se le dice al cliente cuando ya no hay más reintentos. */
-export const PROVIDER_DOWN_REPLY =
-  "Dame unos minutos y te confirmo por aquí.";
-
-/** Lo que se añade a la confirmación de una cita antes de que el agente se calle. */
-export const AFTER_BOOKING_FAREWELL =
-  "Cualquier cambio me escribes por aquí y el equipo te ayuda.";
 
 export function isHandoffAction(
   action: AgentActionType

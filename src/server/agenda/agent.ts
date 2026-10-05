@@ -3,6 +3,7 @@ import { getSettings } from "@/server/agenda/settings";
 import { spreadByDay } from "@/server/agenda/spread";
 import { replaceOffers } from "@/server/agenda/offers";
 import { BookingError, createSessionBooking } from "@/server/agenda/service";
+import { defaultSay, type Say } from "@/server/replies/bank";
 
 /**
  * 015 — Lo que el agente incluido puede hacer con la agenda.
@@ -32,7 +33,10 @@ export async function offerSlots(input: {
   organizationId: string;
   conversationId: string;
   intro?: string;
+  /** Las frases salen del banco del negocio (trato y variantes). */
+  say?: Say;
 }): Promise<AgendaTurn> {
+  const say = input.say ?? defaultSay();
   const settings = await getSettings(input.organizationId);
   const now = new Date();
   const all = await computeAvailability(input.organizationId, {
@@ -50,9 +54,7 @@ export async function offerSlots(input: {
     // Agenda llena no es un error: es una respuesta que el cliente entiende.
     return {
       ok: false,
-      text:
-        input.intro?.trim() ||
-        "Por ahora no me quedan horarios libres. Déjame confirmarlo con el equipo y te aviso.",
+      text: say("sin_horarios"),
     };
   }
 
@@ -66,7 +68,7 @@ export async function offerSlots(input: {
 
   const shown = spread.slice(0, SHOWN);
   const lista = shown.map((s) => `• ${s.dayLabel} a las ${s.time}`).join("\n");
-  const intro = input.intro?.trim() || "Tengo estos horarios disponibles:";
+  const intro = input.intro?.trim() || say("ofrecer_horarios");
   return { ok: true, text: `${intro}\n${lista}` };
 }
 
@@ -77,7 +79,9 @@ export async function bookSlot(input: {
   confirmation?: string;
   /** Lo que eligió el cliente; el motor decide si está permitida. */
   modality?: string | null;
+  say?: Say;
 }): Promise<AgendaTurn> {
+  const say = input.say ?? defaultSay();
   try {
     const result = await createSessionBooking({
       organizationId: input.organizationId,
@@ -89,17 +93,17 @@ export async function bookSlot(input: {
     });
 
     const base =
-      input.confirmation?.trim() || `¡Listo! Te agendé para ${result.label}.`;
+      input.confirmation?.trim() || say("cita_confirmada", { horario: result.label });
     if (result.modality === "presencial") {
       return {
         ok: true,
         text: result.address
-          ? `${base}\nTe esperamos en ${result.address}.`
+          ? `${base}\n${say("cita_presencial", { direccion: result.address })}`
           : base,
       };
     }
     if (result.modality === "llamada") {
-      return { ok: true, text: `${base}\nTe llamamos a este mismo número.` };
+      return { ok: true, text: `${base}\n${say("cita_llamada")}` };
     }
     if (result.meetingLink) {
       return { ok: true, text: `${base}\nEnlace: ${result.meetingLink}` };
@@ -108,7 +112,7 @@ export async function bookSlot(input: {
       // La cita existe; el enlace no. No se promete lo que no se tiene.
       return {
         ok: true,
-        text: `${base}\nEn un momento te comparto el enlace por aquí.`,
+        text: `${base}\n${say("cita_enlace_pendiente")}`,
       };
     }
     return { ok: true, text: base };
@@ -123,14 +127,12 @@ export async function bookSlot(input: {
         .map((s) => `• ${s.label}`)
         .join("\n");
       const disculpa =
-        err.code === "slot_taken"
-          ? "Se me acaba de ocupar ese horario, ¡perdón!"
-          : "Déjame confirmarte los horarios que tengo:";
+        err.code === "slot_taken" ? say("horario_ocupado") : say("reofrecer_horarios");
       return { ok: false, text: `${disculpa}\n${lista}` };
     }
     return {
       ok: false,
-      text: "No pude agendarlo en este momento. Lo reviso con el equipo y te confirmo.",
+      text: say("no_pude_agendar"),
     };
   }
 }

@@ -28,6 +28,7 @@ export const GET = withAuth(async (session) => {
       delayMinSec: p.delayMinSec,
       delayMaxSec: p.delayMaxSec,
       jevMode: p.jevMode,
+      formality: p.formality,
     },
     jevAvailable: jevEnabled(),
     aiConfigured: await isAiAvailable(session.organizationId),
@@ -45,6 +46,7 @@ const putSchema = z.object({
   delayMinSec: z.number().int().min(0).max(900).optional(),
   delayMaxSec: z.number().int().min(0).max(1800).optional(),
   jevMode: z.enum(["off", "shadow", "on"]).optional(),
+  formality: z.enum(["usted", "tu"]).optional(),
 });
 
 export const PUT = withAuth(async (session, req: Request) => {

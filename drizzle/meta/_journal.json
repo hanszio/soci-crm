@@ -134,6 +134,13 @@
       "when": 1791213033923,
       "tag": "0018_jev_banco_respuestas",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1791214918842,
+      "tag": "0019_trato",
+      "breakpoints": true
     }
   ]
 }

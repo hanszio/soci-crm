@@ -11,8 +11,8 @@ import { SendError, sendMediaMessage, sendText } from "@/server/inbox/send";
 import { getSendableItem, listActiveItems, readItemFile } from "@/server/catalog/items";
 import { jevEnabled } from "@/server/jev/flag";
 import { decideTurn, markDecision } from "@/server/jev/decide";
-import type { Plan } from "@/server/jev/route";
-import { pickReply } from "@/server/replies/bank";
+import { isCourtesyPlan, type Plan } from "@/server/jev/route";
+import { loadSay, type Say } from "@/server/replies/bank";
 import { getBranding } from "@/server/branding";
 import {
   agentActionSchema,
@@ -28,14 +28,11 @@ import { getOffers } from "@/server/agenda/offers";
 import { getSettings } from "@/server/agenda/settings";
 import { hasActiveBooking } from "@/server/agenda/service";
 import {
-  AFTER_BOOKING_FAREWELL,
-  CALL_OFFER_INTRO,
   decideEscalation,
   ensureGreeting,
   looksLikeInventedSlots,
   pickGreeting,
   nextProviderRetry,
-  PROVIDER_DOWN_REPLY,
   stripSlotSentences,
 } from "@/server/ai/policy";
 
@@ -95,7 +92,13 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   const organizationId = conversation.organizationId;
 
   // Condiciones de silencio: handoff activo o IA apagada en la conversación.
-  if (conversation.handoffAt || !conversation.aiEnabled) return;
+  if (!conversation.aiEnabled) return;
+  // Tras agendar la conversación es del equipo; lo único que el agente puede
+  // seguir haciendo es contestar una cortesía ("gracias" → "con gusto"), y
+  // solo si Jev la reconoce con seguridad. Cualquier otro handoff es silencio.
+  const courtesyOnly =
+    Boolean(conversation.handoffAt) && conversation.handoffReason === "cita_agendada" && jevEnabled();
+  if (conversation.handoffAt && !courtesyOnly) return;
 
   const profileRows = await db
     .select()
@@ -120,6 +123,19 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   // Primer mensaje del agente: abre con uno de los saludos configurados.
   const firstTurn = !history.some((m) => m.direction === "out");
   const greeting = firstTurn ? pickGreeting(profile.greeting) : null;
+  if (courtesyOnly && profile.jevMode !== "on") return;
+
+  // Cómo habla este negocio: sus variantes (o las de fábrica en su trato), sin
+  // repetir lo ya dicho en la conversación.
+  const outs = history.filter((m) => m.direction === "out" && m.text);
+  const usedTexts = outs.map((m) => m.text!);
+  const branding = await getBranding(organizationId).catch(() => null);
+  const say = await loadSay({
+    organizationId,
+    formality: profile.formality,
+    usedTexts,
+    slots: { agente: profile.name, negocio: branding?.name },
+  });
 
   // Ventana cerrada: el agente JAMÁS envía texto libre → handoff 'ventana'.
   if (!conversation.isTest && !isWindowOpen(conversation.lastInboundAt)) {
@@ -132,7 +148,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   // Patrón de respaldo ANTES del LLM (FR-022). Con la política `cita`, pedir
   // un humano se convierte en ofrecer una llamada agendada: el dueño no vive
   // en el dashboard, y un handoff mudo se ve como "no me respondieron".
-  if (lastInbound.text && matchesHandoffIntent(lastInbound.text)) {
+  if (!courtesyOnly && lastInbound.text && matchesHandoffIntent(lastInbound.text)) {
     const decision = decideEscalation({
       mode: profile.escalationMode,
       agenda,
@@ -147,7 +163,8 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
         const turn = await offerSlots({
           organizationId,
           conversationId,
-          intro: CALL_OFFER_INTRO,
+          intro: say("ofrecer_llamada"),
+          say,
         });
         await deliverReply(conversation, turn.text);
         return;
@@ -156,7 +173,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
       }
     }
     try {
-      await deliverReply(conversation, HANDOFF_FAREWELL);
+      await deliverReply(conversation, say("pasar_a_asesor"));
     } catch (err) {
       console.error("[agente] no se pudo enviar la despedida del handoff:", err);
     }
@@ -176,13 +193,16 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   // Archivos que ya salieron en esta conversación (para no repetirlos).
   const sentFileNames = new Set<string>();
   if (catalog.length > 0) {
-    const sent = await db
-      .select({ fileName: schema.mediaAsset.fileName })
-      .from(schema.message)
-      .innerJoin(schema.mediaAsset, eq(schema.mediaAsset.id, schema.message.mediaAssetId))
-      .where(eq(schema.message.conversationId, conversationId))
-      .catch(() => []);
-    for (const r of sent) if (r.fileName) sentFileNames.add(r.fileName);
+    try {
+      const sent = await db
+        .select({ fileName: schema.mediaAsset.fileName })
+        .from(schema.message)
+        .innerJoin(schema.mediaAsset, eq(schema.mediaAsset.id, schema.message.mediaAssetId))
+        .where(eq(schema.message.conversationId, conversationId));
+      for (const r of sent) if (r.fileName) sentFileNames.add(r.fileName);
+    } catch (err) {
+      console.warn(`[agente] no pude leer los archivos enviados: ${err}`);
+    }
   }
   const stages = await db
     .select({ id: schema.pipelineStage.id, name: schema.pipelineStage.name })
@@ -242,10 +262,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   let direct: AgentActionType | null = null;
   let decisionId: string | null = null;
   if (jevEnabled() && profile.jevMode !== "off" && lastInbound.text) {
-    const outs = history.filter((m) => m.direction === "out" && m.text);
     const lastOut = outs[outs.length - 1]?.text ?? "";
-    const branding = await getBranding(organizationId).catch(() => null);
-    const usedTexts = outs.map((m) => m.text!);
     const decided = await decideTurn({
       organizationId,
       conversationId,
@@ -277,15 +294,13 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     if (decided) {
       decisionId = decided.decisionId;
       if (profile.jevMode === "on") {
-        direct = await materializePlan(decided.plan, {
-          organizationId,
-          usedTexts,
-          slots: { agente: profile.name, negocio: branding?.name },
-          kb,
-        });
+        direct = materializePlan(decided.plan, { say, kb });
+        if (courtesyOnly && !isCourtesyPlan(decided.plan)) direct = null;
       }
     }
   }
+  // Con la cita ya agendada no hay turno de LLM: cortesía o silencio.
+  if (courtesyOnly && !direct) return;
 
   let decidedAction: AgentActionType;
   if (direct) {
@@ -318,7 +333,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
       }
       clearRetry(conversationId);
       try {
-        await deliverReply(conversation, PROVIDER_DOWN_REPLY);
+        await deliverReply(conversation, say("espera"));
       } catch (err) {
         console.error("[agente] no pude avisar la caída del proveedor:", err);
       }
@@ -346,7 +361,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
       reason: action.reason ?? null,
     });
     if (decision.kind === "offer_call") {
-      action = { action: "offer_slots", reply: CALL_OFFER_INTRO };
+      action = { action: "offer_slots", reply: say("ofrecer_llamada") };
     }
   }
 
@@ -372,6 +387,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
                 organizationId,
                 conversationId,
                 intro: action.reply,
+                say,
               })
             : await bookSlot({
                 organizationId,
@@ -379,11 +395,12 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
                 startUtc: action.startUtc,
                 confirmation: action.reply,
                 modality: action.modality,
+                say,
               });
         const booked = action.action === "book_slot" && turn.ok;
         await deliverReply(
           conversation,
-          booked ? `${turn.text}\n${AFTER_BOOKING_FAREWELL}` : turn.text
+          booked ? `${turn.text}\n${say("cita_cierre")}` : turn.text
         );
         if (booked) {
           // La cita es el cierre: de aquí en adelante habla el equipo. El lead
@@ -490,8 +507,6 @@ export function formatNow(date: Date, timezone: string): string {
   return `${text} (${timezone})`;
 }
 
-/** Texto fijo al escalar por la regex de respaldo (sin pasar por el modelo). */
-const HANDOFF_FAREWELL = "Claro, te paso con un asesor ahora mismo. En un momento te atiende.";
 
 type Conversation = typeof schema.conversation.$inferSelect;
 
@@ -547,28 +562,21 @@ async function persistTestOutbound(
  * Convierte el plan de Jev en una acción del agente. Null ⇒ que responda el
  * LLM (el plan era `llm`, o falta el dato para ejecutarlo).
  */
-async function materializePlan(
+function materializePlan(
   plan: Plan,
-  ctx: {
-    organizationId: string;
-    usedTexts: string[];
-    slots: { agente?: string; negocio?: string };
-    kb: (typeof schema.kbEntry.$inferSelect)[];
-  }
-): Promise<AgentActionType | null> {
-  const say = (key: Parameters<typeof pickReply>[0]["key"]) =>
-    pickReply({ organizationId: ctx.organizationId, key, usedTexts: ctx.usedTexts, slots: ctx.slots });
+  ctx: { say: Say; kb: (typeof schema.kbEntry.$inferSelect)[] }
+): AgentActionType | null {
   switch (plan.type) {
     case "llm":
       return null;
     case "bank":
-      return { action: "reply", text: await say(plan.key) };
+      return { action: "reply", text: ctx.say(plan.key) };
     case "ficha": {
       const entry = ctx.kb.find((e) => e.id === plan.fichaId);
       return entry?.answer ? { action: "reply", text: entry.answer } : null;
     }
     case "offer":
-      return { action: "offer_slots", reply: await say("ofrecer_horarios") };
+      return { action: "offer_slots", reply: ctx.say("ofrecer_horarios") };
     case "book":
       return {
         action: "book_slot",
@@ -576,9 +584,9 @@ async function materializePlan(
         modality: (plan.modality ?? undefined) as "presencial" | "llamada" | "videollamada" | undefined,
       };
     case "send":
-      return { action: "send_product", itemId: plan.itemId, caption: await say("pie_archivo") };
+      return { action: "send_product", itemId: plan.itemId, caption: ctx.say("pie_archivo") };
     case "handoff":
-      return { action: "handoff", reason: plan.reason, farewell: HANDOFF_FAREWELL };
+      return { action: "handoff", reason: plan.reason, farewell: ctx.say("pasar_a_asesor") };
   }
 }
 

@@ -602,6 +602,10 @@ export const agentProfile = pgTable(
      * registra pero responde el LLM; `on` responde directo cuando su confianza
      * alcanza el umbral y deja el resto al LLM. Solo aplica con la bandera JEV.
      */
+    /** Trato al cliente: de él salen las frases fijas del banco de respuestas. */
+    formality: text("formality", { enum: ["usted", "tu"] })
+      .notNull()
+      .default("usted"),
     jevMode: text("jev_mode", { enum: ["off", "shadow", "on"] })
       .notNull()
       .default("off"),
