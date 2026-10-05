@@ -133,6 +133,9 @@ export function buildAgentSystemPrompt(input: {
       ? "TU OBJETIVO en cada conversación es llegar a una cita (presencial o llamada con un asesor). Resuelve dudas con el conocimiento y, cuando el cliente muestre interés, pida algo que solo un asesor puede resolver (precio final, cotización formal, pedido, reclamo) o pida hablar con alguien, propón agendar. Nunca dejes al cliente sin respuesta."
       : null,
     STYLE_RULES,
+    profile.formality === "tu"
+      ? "Trato: tutea siempre al cliente (tú)."
+      : "Trato: habla siempre de usted al cliente.",
     profile.tone ? `Tono: ${profile.tone}` : null,
     profile.instructions ? `Instrucciones del negocio:\n${profile.instructions}` : null,
     profile.escalationRules

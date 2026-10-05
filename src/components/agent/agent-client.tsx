@@ -22,6 +22,7 @@ type Profile = {
   delayMinSec: number;
   delayMaxSec: number;
   jevMode: "off" | "shadow" | "on";
+  formality: "usted" | "tu";
 };
 
 type KbEntry = {
@@ -205,6 +206,18 @@ function ProfileSection({
             más, como una persona mirando el calendario. Antes de responder
             aparece &quot;escribiendo…&quot;.
           </p>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="agent-formality">Trato al cliente</Label>
+          <select
+            id="agent-formality"
+            className="h-9 w-full rounded-sm border border-border bg-background px-2 text-sm"
+            value={form.formality}
+            onChange={(e) => setForm({ ...form, formality: e.target.value as Profile["formality"] })}
+          >
+            <option value="usted">De usted</option>
+            <option value="tu">De tú</option>
+          </select>
         </div>
         {jevAvailable && (
           <div className="space-y-1.5">

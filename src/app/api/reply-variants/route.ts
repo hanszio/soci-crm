@@ -1,18 +1,26 @@
 import { z } from "zod";
 import { apiError, parseBody, withAuth } from "@/lib/api";
 import { addVariants, listVariants } from "@/server/replies/bank";
-import { DEFAULT_VARIANTS, REPLY_KEYS, REPLY_KEY_META } from "@/server/replies/keys";
+import { eq } from "drizzle-orm";
+import { getDb, schema } from "@/lib/db";
+import { defaultVariants, REPLY_KEYS, REPLY_KEY_META } from "@/server/replies/keys";
 
 export const dynamic = "force-dynamic";
 
 /** Banco de respuestas del negocio, agrupado por clave, con las de fábrica al lado. */
 export const GET = withAuth(async (session) => {
   const rows = await listVariants(session.organizationId);
+  const profile = await getDb()
+    .select({ formality: schema.agentProfile.formality })
+    .from(schema.agentProfile)
+    .where(eq(schema.agentProfile.organizationId, session.organizationId))
+    .limit(1);
+  const defaults = defaultVariants(profile[0]?.formality ?? "usted");
   return Response.json({
     keys: REPLY_KEYS.map((key) => ({
       key,
       ...REPLY_KEY_META[key],
-      defaults: DEFAULT_VARIANTS[key],
+      defaults: defaults[key],
       variants: rows
         .filter((r) => r.key === key)
         .map((r) => ({ id: r.id, text: r.text, source: r.source, active: r.active })),

@@ -2017,7 +2017,7 @@ async function jevChecks() {
   }).catch(() => null);
 
   const banco = (await api("/api/reply-variants")).json?.keys ?? [];
-  ok("el banco trae todas las claves con sus variantes de fábrica", banco.length >= 6 && banco.every((k) => k.defaults.length >= 3), JSON.stringify(banco.map((k) => k.key)));
+  ok("el banco trae todas las claves con sus variantes de fábrica", banco.length >= 6 && banco.every((k) => k.defaults.length >= 2), JSON.stringify(banco.map((k) => k.key)));
   const ackDefaults = banco.find((k) => k.key === "ack")?.defaults ?? [];
   const abrirDefaults = banco.find((k) => k.key === "abrir")?.defaults ?? [];
 

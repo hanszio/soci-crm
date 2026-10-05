@@ -4,6 +4,7 @@ import { getEnv } from "@/lib/env";
 import { enqueue } from "@/server/jobs/queue";
 import { kick } from "@/server/jobs/poller";
 import { computeDelaySec, typingLeadSec } from "@/server/jobs/delay";
+import { jevEnabled } from "@/server/jev/flag";
 
 /**
  * Punto de enganche tras la ingesta de un mensaje entrante REAL: calcula el
@@ -17,6 +18,7 @@ export async function maybeRunAgentTurn(conversationId: string): Promise<void> {
       organizationId: schema.conversation.organizationId,
       aiEnabled: schema.conversation.aiEnabled,
       handoffAt: schema.conversation.handoffAt,
+      handoffReason: schema.conversation.handoffReason,
       isTest: schema.conversation.isTest,
     })
     .from(schema.conversation)
@@ -24,7 +26,9 @@ export async function maybeRunAgentTurn(conversationId: string): Promise<void> {
     .limit(1);
   const conv = convRows[0];
   // El turno vuelve a comprobar todo esto; aquí solo se evita encolar basura.
-  if (!conv || conv.isTest || !conv.aiEnabled || conv.handoffAt) return;
+  if (!conv || conv.isTest || !conv.aiEnabled) return;
+  // Con handoff no hay turno, salvo la cortesía tras agendar (ver pipeline).
+  if (conv.handoffAt && !(conv.handoffReason === "cita_agendada" && jevEnabled())) return;
 
   const profileRows = await db
     .select({

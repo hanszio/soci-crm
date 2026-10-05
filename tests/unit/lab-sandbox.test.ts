@@ -96,7 +96,7 @@ describe("sandbox del Laboratorio en el pipeline del agente", () => {
     };
     selectQueue.push(
       [testConversation], // conversación
-      [{ id: "agp_1", organizationId: "org_1", enabled: false, name: "Asistente", tone: null, instructions: null, escalationRules: null, greeting: null, escalationMode: "cita", delayMinSec: 10, delayMaxSec: 300, jevMode: "off" as const }], // perfil (apagado: el Lab evalúa igual)
+      [{ id: "agp_1", organizationId: "org_1", enabled: false, name: "Asistente", tone: null, instructions: null, escalationRules: null, greeting: null, escalationMode: "cita", delayMinSec: 10, delayMaxSec: 300, jevMode: "off" as const, formality: "usted" as const }], // perfil (apagado: el Lab evalúa igual)
       [
         {
           id: "msg_1",

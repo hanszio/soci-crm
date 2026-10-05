@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
  */
 
 type Variant = { id: string; text: string; source: "owner" | "mined" | "ai"; active: boolean };
-type KeyGroup = { key: string; label: string; hint: string; defaults: string[]; variants: Variant[] };
+type KeyGroup = { key: string; group: string; label: string; hint: string; defaults: string[]; variants: Variant[] };
 
 const SOURCE_LABEL: Record<Variant["source"], string> = {
   owner: "Tuya",
@@ -90,7 +90,10 @@ export function RepliesSection() {
           return (
             <div key={g.key} className="space-y-2">
               <div className="flex flex-wrap items-baseline gap-2">
-                <h4 className="text-sm font-semibold">{g.label}</h4>
+                <h4 className="text-sm font-semibold">
+                  <span className="font-normal text-muted-foreground">{g.group} · </span>
+                  {g.label}
+                </h4>
                 <span className="text-xs text-muted-foreground">{g.hint}</span>
                 <Badge variant="secondary" className="ml-auto">
                   {active > 0 ? `${active} tuyas activas` : `${g.defaults.length} de fábrica`}
