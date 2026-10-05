@@ -45,3 +45,5 @@ scratch/
 .herdr-*.ws
 .env.deploy
 .tmp-jev-eval.mjs
+.tmp-wa-mine.mjs
+banco-minado.json
