@@ -3,6 +3,7 @@ import { apiError, parseBody, withAuth } from "@/lib/api";
 import { getDb, schema } from "@/lib/db";
 import { scoped } from "@/lib/db/tenant";
 import { isAiAvailable } from "@/lib/ai";
+import { jevEnabled } from "@/server/jev/flag";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,9 @@ export const GET = withAuth(async (session) => {
       escalationMode: p.escalationMode,
       delayMinSec: p.delayMinSec,
       delayMaxSec: p.delayMaxSec,
+      jevMode: p.jevMode,
     },
+    jevAvailable: jevEnabled(),
     aiConfigured: await isAiAvailable(session.organizationId),
   });
 });
@@ -41,6 +44,7 @@ const putSchema = z.object({
   escalationMode: z.enum(["cita", "humano"]).optional(),
   delayMinSec: z.number().int().min(0).max(900).optional(),
   delayMaxSec: z.number().int().min(0).max(1800).optional(),
+  jevMode: z.enum(["off", "shadow", "on"]).optional(),
 });
 
 export const PUT = withAuth(async (session, req: Request) => {

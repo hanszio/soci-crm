@@ -22,6 +22,9 @@ services:
       AGENT_COALESCE_MS: ${AGENT_COALESCE_MS:-6000}
       AGENT_DELAY_MODE: ${AGENT_DELAY_MODE:-human}
       AGENT_JOB_POLL_MS: ${AGENT_JOB_POLL_MS:-2000}
+      JEV: ${JEV:-}
+      TYPESAFE_API_KEY: ${TYPESAFE_API_KEY:-}
+      TYPESAFE_MODEL: ${TYPESAFE_MODEL:-}
     depends_on:
       postgres:
         condition: service_healthy

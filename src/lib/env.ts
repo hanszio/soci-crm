@@ -75,6 +75,12 @@ const envSchema = z.object({
   // negocio en Ajustes → Agente); `instant` = sin retraso (tests, mocks).
   AGENT_DELAY_MODE: z.enum(["human", "instant"]).default("human"),
   AGENT_JOB_POLL_MS: z.coerce.number().int().min(250).default(2000),
+  // 018 — Jev (TypeSafe): decisor rápido del turno. Conector opcional: sin la
+  // bandera o sin clave no existe. Cada negocio elige off | shadow | on.
+  JEV: z.string().optional(),
+  TYPESAFE_API_KEY: z.string().optional(),
+  TYPESAFE_BASE_URL: z.string().url().optional(),
+  TYPESAFE_MODEL: z.string().optional(),
   WA_MOCK_ENABLED: z.string().optional(),
   // API key de un cerebro externo que conduzca la conversación por /api/bot/*.
   // Sin ella, toda esa superficie responde 401.

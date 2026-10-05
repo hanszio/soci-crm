@@ -85,7 +85,7 @@ describe("el prompt y las modalidades", () => {
     greeting: null,
     escalationMode: "cita" as const,
   delayMinSec: 10,
-  delayMaxSec: 300,
+  delayMaxSec: 300, jevMode: "off" as const,
     createdAt: new Date(),
     updatedAt: new Date(),
   };

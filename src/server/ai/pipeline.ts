@@ -9,6 +9,11 @@ import { publish } from "@/server/events/bus";
 import { isWindowOpen } from "@/server/inbox/window";
 import { SendError, sendMediaMessage, sendText } from "@/server/inbox/send";
 import { getSendableItem, listActiveItems, readItemFile } from "@/server/catalog/items";
+import { jevEnabled } from "@/server/jev/flag";
+import { decideTurn, markDecision } from "@/server/jev/decide";
+import type { Plan } from "@/server/jev/route";
+import { pickReply } from "@/server/replies/bank";
+import { getBranding } from "@/server/branding";
 import {
   agentActionSchema,
   degradeAction,
@@ -168,6 +173,17 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
     console.warn(`[agente] no pude leer el catálogo: ${err}`);
     return [];
   });
+  // Archivos que ya salieron en esta conversación (para no repetirlos).
+  const sentFileNames = new Set<string>();
+  if (catalog.length > 0) {
+    const sent = await db
+      .select({ fileName: schema.mediaAsset.fileName })
+      .from(schema.message)
+      .innerJoin(schema.mediaAsset, eq(schema.mediaAsset.id, schema.message.mediaAssetId))
+      .where(eq(schema.message.conversationId, conversationId))
+      .catch(() => []);
+    for (const r of sent) if (r.fileName) sentFileNames.add(r.fileName);
+  }
   const stages = await db
     .select({ id: schema.pipelineStage.id, name: schema.pipelineStage.name })
     .from(schema.pipelineStage)
@@ -219,42 +235,102 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
       })),
   ];
 
-  const result = await chatJson(agentActionSchema(agenda), messages, {
-    organizationId,
-    kind: "chat",
-  });
-  if (!result.ok) {
-    if (result.error === "not_configured") return;
-    console.error(`[agente] fallo del proveedor (raw): ${result.detail}`);
-    // Un hipo del proveedor no puede dejar al cliente sin respuesta ni pausar
-    // la IA para siempre: se reintenta el turno con espera creciente y solo
-    // al agotar los intentos se avisa al cliente y se escala.
-    const attempt = bumpRetry(conversationId);
-    const delay = nextProviderRetry(attempt);
-    if (delay !== null) {
-      console.warn(
-        `[agente] reintento ${attempt + 1} del turno en ${Math.round(delay / 1000)}s`
-      );
-      await enqueue({
-        organizationId,
-        kind: "agent_turn",
-        conversationId,
-        runAt: new Date(Date.now() + delay),
-      });
+  // 018 — Jev decide primero. En modo `on`, lo que alcanza su umbral sale por
+  // el carril directo (banco de respuestas, ficha, agenda, archivo) sin LLM;
+  // en `shadow` solo se registra. Si Jev falla o duda, el turno sigue igual
+  // que siempre.
+  let direct: AgentActionType | null = null;
+  let decisionId: string | null = null;
+  if (jevEnabled() && profile.jevMode !== "off" && lastInbound.text) {
+    const outs = history.filter((m) => m.direction === "out" && m.text);
+    const lastOut = outs[outs.length - 1]?.text ?? "";
+    const branding = await getBranding(organizationId).catch(() => null);
+    const usedTexts = outs.map((m) => m.text!);
+    const decided = await decideTurn({
+      organizationId,
+      conversationId,
+      agenda,
+      lastOutIsQuestion: /\?\s*$/.test(lastOut.trim()),
+      sentItemIds: catalog
+        .filter((it) => usedTexts.some((t) => t.includes(`[archivo: ${it.title}]`)) || sentFileNames.has(it.fileName))
+        .map((it) => it.id),
+      context: {
+        business: { name: branding?.name ?? "el negocio", agent: profile.name },
+        history: history
+          .filter((m) => m.text && m.id !== lastInbound.id)
+          .map((m) => ({
+            from: m.direction === "in" ? ("cliente" as const) : ("asistente" as const),
+            text: m.text!,
+          })),
+        lastMessage: lastInbound.text,
+        offers,
+        fichas: kb
+          .filter((e) => e.kind === "qa" && e.question && e.answer)
+          .map((e) => ({ id: e.id, question: e.question! })),
+        files: catalog.map((it) => ({ id: it.id, title: it.title, when: it.description })),
+        modalities: modalities ?? [],
+      },
+    }).catch((err) => {
+      console.warn(`[jev] decisión falló: ${err}`);
+      return null;
+    });
+    if (decided) {
+      decisionId = decided.decisionId;
+      if (profile.jevMode === "on") {
+        direct = await materializePlan(decided.plan, {
+          organizationId,
+          usedTexts,
+          slots: { agente: profile.name, negocio: branding?.name },
+          kb,
+        });
+      }
+    }
+  }
+
+  let decidedAction: AgentActionType;
+  if (direct) {
+    decidedAction = direct;
+    await markDecision(decisionId, { applied: true });
+  } else {
+    const result = await chatJson(agentActionSchema(agenda), messages, {
+      organizationId,
+      kind: "chat",
+    });
+    if (!result.ok) {
+      if (result.error === "not_configured") return;
+      console.error(`[agente] fallo del proveedor (raw): ${result.detail}`);
+      // Un hipo del proveedor no puede dejar al cliente sin respuesta ni pausar
+      // la IA para siempre: se reintenta el turno con espera creciente y solo
+      // al agotar los intentos se avisa al cliente y se escala.
+      const attempt = bumpRetry(conversationId);
+      const delay = nextProviderRetry(attempt);
+      if (delay !== null) {
+        console.warn(
+          `[agente] reintento ${attempt + 1} del turno en ${Math.round(delay / 1000)}s`
+        );
+        await enqueue({
+          organizationId,
+          kind: "agent_turn",
+          conversationId,
+          runAt: new Date(Date.now() + delay),
+        });
+        return;
+      }
+      clearRetry(conversationId);
+      try {
+        await deliverReply(conversation, PROVIDER_DOWN_REPLY);
+      } catch (err) {
+        console.error("[agente] no pude avisar la caída del proveedor:", err);
+      }
+      await applyHandoff(conversationId, organizationId, "error");
       return;
     }
     clearRetry(conversationId);
-    try {
-      await deliverReply(conversation, PROVIDER_DOWN_REPLY);
-    } catch (err) {
-      console.error("[agente] no pude avisar la caída del proveedor:", err);
-    }
-    await applyHandoff(conversationId, organizationId, "error");
-    return;
+    decidedAction = result.data;
+    await markDecision(decisionId, { llmAction: result.data.action });
   }
-  clearRetry(conversationId);
 
-  let action: AgentActionType = withGreeting(result.data, greeting);
+  let action: AgentActionType = withGreeting(decidedAction, greeting);
 
   // Política de cierre: el modelo quiere escalar, pero con `cita` eso se
   // convierte en ofrecer una llamada, salvo que ya haya cita o el motivo sea
@@ -277,7 +353,7 @@ export async function runAgentTurn(conversationId: string): Promise<void> {
   // Guardarraíl: el modelo escribió horarios él mismo (copiados del historial
   // o inventados). Se convierte en una oferta real; lo demás del texto queda
   // como introducción.
-  if (agenda && action.action === "reply" && looksLikeInventedSlots(action.text)) {
+  if (!direct && agenda && action.action === "reply" && looksLikeInventedSlots(action.text)) {
     console.warn(`[agente] el modelo redactó horarios; se re-ofrece con los reales`);
     const intro = stripSlotSentences(action.text);
     action = { action: "offer_slots", reply: intro || undefined };
@@ -465,6 +541,45 @@ async function persistTestOutbound(
     .update(schema.conversation)
     .set({ lastMessageAt: new Date(), updatedAt: new Date() })
     .where(eq(schema.conversation.id, conversation.id));
+}
+
+/**
+ * Convierte el plan de Jev en una acción del agente. Null ⇒ que responda el
+ * LLM (el plan era `llm`, o falta el dato para ejecutarlo).
+ */
+async function materializePlan(
+  plan: Plan,
+  ctx: {
+    organizationId: string;
+    usedTexts: string[];
+    slots: { agente?: string; negocio?: string };
+    kb: (typeof schema.kbEntry.$inferSelect)[];
+  }
+): Promise<AgentActionType | null> {
+  const say = (key: Parameters<typeof pickReply>[0]["key"]) =>
+    pickReply({ organizationId: ctx.organizationId, key, usedTexts: ctx.usedTexts, slots: ctx.slots });
+  switch (plan.type) {
+    case "llm":
+      return null;
+    case "bank":
+      return { action: "reply", text: await say(plan.key) };
+    case "ficha": {
+      const entry = ctx.kb.find((e) => e.id === plan.fichaId);
+      return entry?.answer ? { action: "reply", text: entry.answer } : null;
+    }
+    case "offer":
+      return { action: "offer_slots", reply: await say("ofrecer_horarios") };
+    case "book":
+      return {
+        action: "book_slot",
+        startUtc: plan.startUtc,
+        modality: (plan.modality ?? undefined) as "presencial" | "llamada" | "videollamada" | undefined,
+      };
+    case "send":
+      return { action: "send_product", itemId: plan.itemId, caption: await say("pie_archivo") };
+    case "handoff":
+      return { action: "handoff", reason: plan.reason, farewell: HANDOFF_FAREWELL };
+  }
 }
 
 /** Antepone el saludo del primer mensaje a lo que vaya a decir el agente. */

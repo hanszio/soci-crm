@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CatalogSection } from "@/components/agent/catalog-section";
+import { RepliesSection } from "@/components/agent/replies-section";
 
 type Profile = {
   enabled: boolean;
@@ -20,6 +21,7 @@ type Profile = {
   escalationMode: "cita" | "humano";
   delayMinSec: number;
   delayMaxSec: number;
+  jevMode: "off" | "shadow" | "on";
 };
 
 type KbEntry = {
@@ -33,6 +35,7 @@ type KbEntry = {
 export function AgentClient() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [aiConfigured, setAiConfigured] = useState(true);
+  const [jevAvailable, setJevAvailable] = useState(false);
   const [entries, setEntries] = useState<KbEntry[]>([]);
   const [kbSize, setKbSize] = useState<{ chars: number; warnAt: number; warning: boolean } | null>(null);
   const [saved, setSaved] = useState(false);
@@ -46,6 +49,7 @@ export function AgentClient() {
     if (p) {
       setProfile(p.profile);
       setAiConfigured(p.aiConfigured);
+      setJevAvailable(Boolean(p.jevAvailable));
     }
     if (kb) setEntries(kb.entries);
     if (size) setKbSize(size);
@@ -116,9 +120,10 @@ export function AgentClient() {
       )}
 
       <div className="grid gap-4 p-4 sm:gap-6 sm:p-6 lg:grid-cols-2">
-        <ProfileSection profile={profile} onSave={saveProfile} />
+        <ProfileSection profile={profile} jevAvailable={jevAvailable} onSave={saveProfile} />
         <KbSection entries={entries} kbSize={kbSize} onChanged={() => void refetch()} />
         <CatalogSection />
+        <RepliesSection />
       </div>
     </div>
   );
@@ -126,9 +131,11 @@ export function AgentClient() {
 
 function ProfileSection({
   profile,
+  jevAvailable,
   onSave,
 }: {
   profile: Profile;
+  jevAvailable: boolean;
   onSave: (patch: Partial<Profile>) => Promise<void>;
 }) {
   const [form, setForm] = useState(profile);
@@ -199,6 +206,28 @@ function ProfileSection({
             aparece &quot;escribiendo…&quot;.
           </p>
         </div>
+        {jevAvailable && (
+          <div className="space-y-1.5">
+            <Label htmlFor="agent-jev-mode">Respuestas rápidas (Jev)</Label>
+            <select
+              id="agent-jev-mode"
+              className="h-9 w-full rounded-sm border border-border bg-background px-2 text-sm"
+              value={form.jevMode}
+              onChange={(e) =>
+                setForm({ ...form, jevMode: e.target.value as Profile["jevMode"] })
+              }
+            >
+              <option value="off">Apagado: todo lo responde el modelo de IA</option>
+              <option value="shadow">Observar: decide y registra, pero no responde</option>
+              <option value="on">Encendido: responde directo lo simple, el resto va al modelo</option>
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Saludos, acuses, preguntas frecuentes, horarios y archivos salen
+              al instante de tus respuestas con variantes y tus fichas. Lo
+              complejo sigue yendo al modelo de IA.
+            </p>
+          </div>
+        )}
         <div className="space-y-1.5">
           <Label htmlFor="agent-escalation-mode">Cuando piden un humano</Label>
           <select

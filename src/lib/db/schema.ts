@@ -597,6 +597,14 @@ export const agentProfile = pgTable(
     escalationMode: text("escalation_mode", { enum: ["cita", "humano"] })
       .notNull()
       .default("cita"),
+    /**
+     * Jev (TypeSafe) en el turno: `off` no se consulta; `shadow` decide y se
+     * registra pero responde el LLM; `on` responde directo cuando su confianza
+     * alcanza el umbral y deja el resto al LLM. Solo aplica con la bandera JEV.
+     */
+    jevMode: text("jev_mode", { enum: ["off", "shadow", "on"] })
+      .notNull()
+      .default("off"),
     /** Retraso "humano" antes de contestar, en segundos (T1.2). */
     delayMinSec: integer("delay_min_sec").notNull().default(10),
     delayMaxSec: integer("delay_max_sec").notNull().default(300),
@@ -1049,6 +1057,58 @@ export const capiSettings = pgTable(
 
 // T1.1/T1.6 — configuración de IA por organización y medición de uso.
 export * from "./schema/ai";
+
+/**
+ * Banco de respuestas: varias formas de decir lo mismo por clave (saludo,
+ * acuse, despedida…). El bot elige una al azar sin repetir en la conversación.
+ * Sin filas para una clave, se usan las de fábrica (`server/replies/keys.ts`).
+ */
+export const replyVariant = pgTable(
+  "reply_variant",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    text: text("text").notNull(),
+    /** owner = escrita a mano · mined = sacada de chats reales · ai = generada. */
+    source: text("source", { enum: ["owner", "mined", "ai"] })
+      .notNull()
+      .default("owner"),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => [index("reply_variant_org_key_idx").on(t.organizationId, t.key)]
+);
+
+/**
+ * Lo que Jev decidió en cada turno (modos shadow y on): auditoría, y la base
+ * para comparar a Jev contra el LLM antes de dejarlo responder.
+ */
+export const turnDecision = pgTable(
+  "turn_decision",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    conversationId: text("conversation_id").notNull(),
+    /** bank | ficha | book | offer | send | handoff | llm */
+    plan: text("plan").notNull(),
+    detail: text("detail"),
+    answers: jsonb("answers").notNull(),
+    latencyMs: integer("latency_ms").notNull().default(0),
+    model: text("model").notNull(),
+    /** true ⇒ la respuesta salió del carril directo (modo on). */
+    applied: boolean("applied").notNull().default(false),
+    /** Qué acción tomó el LLM en ese turno, si respondió él. */
+    llmAction: text("llm_action"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => [index("turn_decision_org_idx").on(t.organizationId, t.createdAt)]
+);
 
 /**
  * T5.1 — Catálogo del agente: archivos (PDF, imágenes) con título, descripción
